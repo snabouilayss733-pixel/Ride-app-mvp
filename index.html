@@ -1,89 +1,57 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RideNow - منصة السائقين المتعددين</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة السائق - استقبال الطلبات</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
-        body { font-family: 'Cairo', sans-serif; background: #f8fafc; overflow: hidden; }
-        #map { height: 45vh; width: 100%; z-index: 1; }
-        .bottom-sheet { border-radius: 30px 30px 0 0; box-shadow: 0 -15px 45px rgba(0,0,0,0.1); background: white; position: relative; z-index: 20; margin-top: -35px; }
-        .pulse-button { animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); } 70% { transform: scale(1.03); shadow: 0 0 0 10px rgba(37, 99, 235, 0); } 100% { transform: scale(1); } }
-    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
-<body>
-
-    <div id="map"></div>
-
-    <div class="bottom-sheet p-6 max-h-[60vh] overflow-y-auto">
-        <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
-        
-        <h2 class="text-xl font-black mb-4 text-gray-800">اطلب رحلتك الآن</h2>
-
-        <div class="space-y-3 mb-6">
-            <input type="tel" id="userPhone" placeholder="📱 رقم جوال الراكب" class="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500">
-            <input type="text" id="dest" oninput="calculateTrip()" placeholder="📍 فين باغي تمشي؟" class="w-full p-4 bg-white border-2 border-blue-600 rounded-2xl outline-none font-bold">
-        </div>
-
-        <div id="searching-ui" class="hidden mb-6 p-4 bg-blue-50 rounded-2xl text-center">
-            <div class="flex justify-center mb-3">
-                <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <p class="text-blue-700 font-bold animate-pulse">جاري البحث عن أقرب سائق متاح...</p>
-        </div>
-
-        <div id="trip-info" class="hidden grid grid-cols-2 gap-3 mb-6">
-            <div class="bg-gray-800 text-white p-3 rounded-2xl text-center">
-                <p class="text-[10px] opacity-60">السعر</p>
-                <p id="price" class="font-black text-lg">0 ر.س</p>
-            </div>
-            <div class="bg-blue-100 text-blue-700 p-3 rounded-2xl text-center">
-                <p class="text-[10px] opacity-60">الوقت</p>
-                <p id="time" class="font-black text-lg">-- د</p>
-            </div>
-        </div>
-
-        <button id="orderBtn" onclick="startSearching()" class="w-full bg-black text-white py-4 rounded-2xl font-black text-lg shadow-xl active:scale-95 transition">
-            البحث عن سائق
-        </button>
-    </div>
+<body class="bg-slate-900 text-white p-4">
+    <h1 class="text-2xl font-black mb-6 text-blue-400">طلبات الركاب المباشرة</h1>
+    <div id="orders-list" class="space-y-4"></div>
 
     <script>
-        var map = L.map('map', { zoomControl: false }).setView([24.7136, 46.6753], 12);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        const firebaseConfig = {
+            apiKey: "AIzaSyCyRku2u6gIuj6itpDb7NXIaF-MtBmMomo",
+            authDomain: "ridenowapp-eadf0.firebaseapp.com",
+            projectId: "ridenowapp-eadf0",
+            databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com/",
+            storageBucket: "ridenowapp-eadf0.firebasestorage.app",
+            messagingSenderId: "184047350605",
+            appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
 
-        function calculateTrip() {
-            const dest = document.getElementById('dest').value;
-            if(dest.length > 3) {
-                document.getElementById('trip-info').classList.remove('hidden');
-                let distance = Math.floor(Math.random() * 15) + 5;
-                document.getElementById('price').innerText = (15 + (distance * 2.5)).toFixed(0) + " ر.س";
-                document.getElementById('time').innerText = (distance * 2) + " د";
+        // الاستماع للطلبات الجديدة
+        database.ref('rides').on('value', (snapshot) => {
+            const ordersList = document.getElementById('orders-list');
+            ordersList.innerHTML = '';
+            const data = snapshot.val();
+            
+            for (let id in data) {
+                if(data[id].status === 'pending') {
+                    const card = `
+                        <div class="bg-slate-800 p-5 rounded-2xl border-r-4 border-green-500 shadow-xl">
+                            <p class="text-sm text-gray-400">طلب جديد فـ ${data[id].time}</p>
+                            <p class="text-lg font-bold">📍 الوجهة: ${data[id].destination}</p>
+                            <p class="mb-4 text-blue-300">📱 هاتف: ${data[id].phone}</p>
+                            <button onclick="acceptRide('${id}', '${data[id].phone}')" class="w-full bg-green-600 py-3 rounded-xl font-bold">قبول الرحلة وتساب</button>
+                        </div>
+                    `;
+                    ordersList.innerHTML += card;
+                    // هنا تقدر تزيد صوت تنبيه
+                }
             }
-        }
+        });
 
-        function startSearching() {
-            const phone = document.getElementById('userPhone').value;
-            const dest = document.getElementById('dest').value;
-
-            if(!phone || !dest) { alert('عمر البيانات أولاً'); return; }
-
-            document.getElementById('orderBtn').classList.add('hidden');
-            document.getElementById('searching-ui').classList.remove('hidden');
-
-            // محاكاة إرسال الطلب لقاعدة البيانات
-            setTimeout(() => {
-                alert('تم إرسال طلبك لكافة السائقين القريبين. سيقوم أول سائق متاح بالتواصل معك فوراً.');
-                // هنا غايكون الربط بـ Firebase مستقبلاً
-                window.open(`https://wa.me/966575376680?text=طلب_عام_من_${phone}_إلى_${dest}`);
-            }, 3000);
+        function acceptRide(id, phone) {
+            database.ref('rides/' + id).update({ status: 'accepted' });
+            window.open(`https://wa.me/${phone}?text=مرحباً، أنا السائق، قبلت طلبك للذهاب إلى الوجهة المحددة.`);
         }
     </script>
 </body>
 </html>
+
