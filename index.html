@@ -3,109 +3,86 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RideNow Pro - الاحترافي</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RideNow - منصة السائقين المتعددين</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+        body { font-family: 'Cairo', sans-serif; background: #f8fafc; overflow: hidden; }
         #map { height: 45vh; width: 100%; z-index: 1; }
-        .bottom-sheet { border-radius: 30px 30px 0 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
-        .car-card { border: 2px solid transparent; transition: 0.2s; cursor: pointer; }
-        .car-card.selected { border-color: #000; background-color: #f8f8f8; }
-        .pulsating-circle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; background: #2563eb; border-radius: 50%; box-shadow: 0 0 0 rgba(37, 99, 235, 0.4); animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
+        .bottom-sheet { border-radius: 30px 30px 0 0; box-shadow: 0 -15px 45px rgba(0,0,0,0.1); background: white; position: relative; z-index: 20; margin-top: -35px; }
+        .pulse-button { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); } 70% { transform: scale(1.03); shadow: 0 0 0 10px rgba(37, 99, 235, 0); } 100% { transform: scale(1); } }
     </style>
 </head>
-<body class="bg-white overflow-hidden font-sans">
+<body>
 
     <div id="map"></div>
 
-    <div class="bottom-sheet bg-white absolute bottom-0 w-full p-6 z-20 transition-all overflow-y-auto max-h-[60vh]">
-        <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+    <div class="bottom-sheet p-6 max-h-[60vh] overflow-y-auto">
+        <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
         
-        <h2 class="text-xl font-black mb-4">فين غادي اليوم؟</h2>
-        
+        <h2 class="text-xl font-black mb-4 text-gray-800">اطلب رحلتك الآن</h2>
+
         <div class="space-y-3 mb-6">
-            <div class="flex items-center bg-gray-100 p-3 rounded-xl border border-gray-200">
-                <span class="text-blue-600 mr-2 ml-2 text-lg">🔵</span>
-                <input type="text" id="pickup" placeholder="موقع الانطلاق" class="bg-transparent w-full focus:outline-none text-sm">
+            <input type="tel" id="userPhone" placeholder="📱 رقم جوال الراكب" class="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="text" id="dest" oninput="calculateTrip()" placeholder="📍 فين باغي تمشي؟" class="w-full p-4 bg-white border-2 border-blue-600 rounded-2xl outline-none font-bold">
+        </div>
+
+        <div id="searching-ui" class="hidden mb-6 p-4 bg-blue-50 rounded-2xl text-center">
+            <div class="flex justify-center mb-3">
+                <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <div class="flex items-center bg-gray-100 p-3 rounded-xl border border-gray-200">
-                <span class="text-red-600 mr-2 ml-2 text-lg">📍</span>
-                <input type="text" id="dest" placeholder="حدد الوجهة" class="bg-transparent w-full focus:outline-none text-sm">
+            <p class="text-blue-700 font-bold animate-pulse">جاري البحث عن أقرب سائق متاح...</p>
+        </div>
+
+        <div id="trip-info" class="hidden grid grid-cols-2 gap-3 mb-6">
+            <div class="bg-gray-800 text-white p-3 rounded-2xl text-center">
+                <p class="text-[10px] opacity-60">السعر</p>
+                <p id="price" class="font-black text-lg">0 ر.س</p>
+            </div>
+            <div class="bg-blue-100 text-blue-700 p-3 rounded-2xl text-center">
+                <p class="text-[10px] opacity-60">الوقت</p>
+                <p id="time" class="font-black text-lg">-- د</p>
             </div>
         </div>
 
-        <h3 class="font-bold text-gray-800 mb-3 text-sm">اختر نوع الرحلة:</h3>
-        <div class="grid grid-cols-1 gap-2 mb-6">
-            <div onclick="selectCar(this, 'Ride Economy', 2.5)" class="car-card selected flex items-center justify-between p-3 rounded-xl">
-                <div class="flex items-center">
-                    <span class="text-3xl ml-3">🚕</span>
-                    <div>
-                        <p class="font-bold">Ride Economy</p>
-                        <p class="text-xs text-gray-500 italic">أسرع وأرخص خيار</p>
-                    </div>
-                </div>
-                <p class="font-black text-blue-700" id="price-econ">20 ريال</p>
-            </div>
-            
-            <div onclick="selectCar(this, 'Ride Comfort', 4)" class="car-card flex items-center justify-between p-3 rounded-xl">
-                <div class="flex items-center">
-                    <span class="text-3xl ml-3">🚙</span>
-                    <div>
-                        <p class="font-bold">Ride Comfort</p>
-                        <p class="text-xs text-gray-500 italic">سيارات أحدث ومساحة أكبر</p>
-                    </div>
-                </div>
-                <p class="font-black text-blue-700" id="price-comfort">35 ريال</p>
-            </div>
-        </div>
-
-        <button onclick="requestRide()" class="w-full bg-black text-white p-4 rounded-xl font-bold text-lg hover:bg-gray-800 transition shadow-xl">
-            طلب RideNow
+        <button id="orderBtn" onclick="startSearching()" class="w-full bg-black text-white py-4 rounded-2xl font-black text-lg shadow-xl active:scale-95 transition">
+            البحث عن سائق
         </button>
-
-        <div class="mt-4 flex justify-center space-x-4 border-t pt-4">
-            <button onclick="window.open('https://wa.me/966575376680')" class="text-xs text-gray-500">💬 مساعدة</button>
-            <button class="text-xs text-gray-500">💳 كاش</button>
-        </div>
     </div>
 
     <script>
-        // تشغيل الخريطة
-        var map = L.map('map', { zoomControl: false }).setView([24.7136, 46.6753], 13);
+        var map = L.map('map', { zoomControl: false }).setView([24.7136, 46.6753], 12);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        let selectedType = 'Ride Economy';
-        let baseRate = 2.5;
-
-        function selectCar(element, type, rate) {
-            document.querySelectorAll('.car-card').forEach(el => el.classList.remove('selected'));
-            element.classList.add('selected');
-            selectedType = type;
-            baseRate = rate;
+        function calculateTrip() {
+            const dest = document.getElementById('dest').value;
+            if(dest.length > 3) {
+                document.getElementById('trip-info').classList.remove('hidden');
+                let distance = Math.floor(Math.random() * 15) + 5;
+                document.getElementById('price').innerText = (15 + (distance * 2.5)).toFixed(0) + " ر.س";
+                document.getElementById('time').innerText = (distance * 2) + " د";
+            }
         }
 
-        function requestRide() {
-            const p = document.getElementById('pickup').value;
-            const d = document.getElementById('dest').value;
+        function startSearching() {
+            const phone = document.getElementById('userPhone').value;
+            const dest = document.getElementById('dest').value;
 
-            if(!p || !d) {
-                alert('المرجو تحديد الوجهة أولاً');
-                return;
-            }
+            if(!phone || !dest) { alert('عمر البيانات أولاً'); return; }
 
-            const message = `🚕 طلب رحلة جديد (Pro):
----------------------------
-📍 الانطلاق: ${p}
-🏁 الوجهة: ${d}
-🚗 الفئة: ${selectedType}
-💳 طريقة الدفع: كاش
----------------------------
-يرجى تأكيد الاستلام من السائق.`;
+            document.getElementById('orderBtn').classList.add('hidden');
+            document.getElementById('searching-ui').classList.remove('hidden');
 
-            window.open(`https://wa.me/966575376680?text=${encodeURIComponent(message)}`);
+            // محاكاة إرسال الطلب لقاعدة البيانات
+            setTimeout(() => {
+                alert('تم إرسال طلبك لكافة السائقين القريبين. سيقوم أول سائق متاح بالتواصل معك فوراً.');
+                // هنا غايكون الربط بـ Firebase مستقبلاً
+                window.open(`https://wa.me/966575376680?text=طلب_عام_من_${phone}_إلى_${dest}`);
+            }, 3000);
         }
     </script>
 </body>
