@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم السائق - RideNow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+        body { font-family: 'Cairo', sans-serif; background: #0f172a; color: white; }
+        .status-online { color: #22c55e; }
+        .status-offline { color: #ef4444; }
+        .order-card { background: #1e293b; border-right: 4px solid #3b82f6; }
+    </style>
+</head>
+<body class="p-4">
+
+    <div class="flex justify-between items-center mb-8 bg-slate-800 p-4 rounded-2xl shadow-lg">
+        <div>
+            <h1 class="text-xl font-bold text-blue-400">لوحة السائق</h1>
+            <p id="status-text" class="text-xs status-offline font-bold">الحالة: غير متصل</p>
+        </div>
+        <button onclick="toggleStatus()" id="status-btn" class="bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95">
+            تفعيل الاتصال
+        </button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-8">
+        <div class="bg-slate-800 p-4 rounded-2xl text-center border border-slate-700">
+            <p class="text-[10px] text-gray-400 uppercase">رحلات اليوم</p>
+            <p class="text-2xl font-black">0</p>
+        </div>
+        <div class="bg-slate-800 p-4 rounded-2xl text-center border border-slate-700">
+            <p class="text-[10px] text-gray-400 uppercase">أرباح اليوم</p>
+            <p class="text-2xl font-black text-green-400">0.00</p>
+        </div>
+    </div>
+
+    <h2 class="text-lg font-bold mb-4 flex items-center">
+        <span class="relative flex h-3 w-3 ml-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+        </span>
+        الطلبات المتاحة حالياً
+    </h2>
+
+    <div id="orders-container" class="space-y-4">
+        <div id="no-orders" class="text-center py-10 text-gray-500 italic text-sm">
+            لا توجد طلبات نشطة حالياً. ابقَ متصلاً لاستقبال الرحلات.
+        </div>
+
+        <div class="order-card p-5 rounded-2xl shadow-md hidden" id="sample-order">
+            <div class="flex justify-between mb-3">
+                <span class="bg-blue-900 text-blue-200 text-[10px] px-2 py-1 rounded">طلب جديد</span>
+                <span class="font-bold text-green-400">25.00 ر.س</span>
+            </div>
+            <p class="text-sm mb-1 text-gray-300">📍 من: حي النرجس</p>
+            <p class="text-sm mb-4 text-white font-bold">🏁 إلى: مطار الملك خالد</p>
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="acceptOrder()" class="bg-blue-600 text-white py-3 rounded-xl font-bold text-sm">قبول الرحلة</button>
+                <button class="bg-slate-700 text-gray-300 py-3 rounded-xl font-bold text-sm">تجاهل</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isOnline = false;
+
+        function toggleStatus() {
+            isOnline = !isOnline;
+            const btn = document.getElementById('status-btn');
+            const statusText = document.getElementById('status-text');
+
+            if (isOnline) {
+                btn.innerText = "إيقاف الاتصال";
+                btn.className = "bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95";
+                statusText.innerText = "الحالة: متصل (استقبال الطلبات)";
+                statusText.className = "text-xs status-online font-bold";
+                // هنا مستقبلاً يتم تفعيل الـ GPS وإرسال الموقع لـ Firebase
+            } else {
+                btn.innerText = "تفعيل الاتصال";
+                btn.className = "bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95";
+                statusText.innerText = "الحالة: غير متصل";
+                statusText.className = "text-xs status-offline font-bold";
+            }
+        }
+
+        function acceptOrder() {
+            alert('تم قبول الرحلة! يتم الآن توجيهك لموقع الراكب.');
+            // هنا يتم فتح الخريطة للتوجه للراكب
+        }
+    </script>
+</body>
+</html>
