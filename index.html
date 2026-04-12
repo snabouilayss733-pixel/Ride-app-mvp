@@ -3,55 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RideNow - تطبيق التوصيل</title>
+    <title>RideNow Pro - الاحترافي</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        #map { height: 350px; width: 100%; border-radius: 20px; z-index: 1; }
+        #map { height: 45vh; width: 100%; z-index: 1; }
+        .bottom-sheet { border-radius: 30px 30px 0 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
+        .car-card { border: 2px solid transparent; transition: 0.2s; cursor: pointer; }
+        .car-card.selected { border-color: #000; background-color: #f8f8f8; }
+        .pulsating-circle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; background: #2563eb; border-radius: 50%; box-shadow: 0 0 0 rgba(37, 99, 235, 0.4); animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
     </style>
 </head>
-<body class="bg-gray-100 font-sans">
-    <header class="bg-white p-4 shadow-md flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-blue-600">RideNow</h1>
-        <div class="bg-gray-200 p-2 rounded-full">👤</div>
-    </header>
+<body class="bg-white overflow-hidden font-sans">
 
-    <div class="p-4">
-        <div id="map" class="shadow-lg border-2 border-white"></div>
-    </div>
+    <div id="map"></div>
 
-    <div class="fixed bottom-0 left-0 right-0 bg-white p-6 rounded-t-[30px] shadow-2xl">
-        <div class="space-y-3">
-            <input type="text" id="pickup" placeholder="📍 مكان الانطلاق" class="w-full p-4 bg-gray-50 border rounded-2xl">
-            <input type="text" id="dest" placeholder="🏁 إلى أين؟" class="w-full p-4 bg-gray-50 border rounded-2xl">
-        </div>
-
-        <div class="flex gap-3 my-4 overflow-x-auto">
-            <div class="border-2 border-blue-500 bg-blue-50 p-3 rounded-2xl min-w-[100px] text-center">
-                <p class="font-bold">اقتصادي</p>
-                <p class="text-blue-600 text-sm">20 ريال</p>
+    <div class="bottom-sheet bg-white absolute bottom-0 w-full p-6 z-20 transition-all overflow-y-auto max-h-[60vh]">
+        <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+        
+        <h2 class="text-xl font-black mb-4">فين غادي اليوم؟</h2>
+        
+        <div class="space-y-3 mb-6">
+            <div class="flex items-center bg-gray-100 p-3 rounded-xl border border-gray-200">
+                <span class="text-blue-600 mr-2 ml-2 text-lg">🔵</span>
+                <input type="text" id="pickup" placeholder="موقع الانطلاق" class="bg-transparent w-full focus:outline-none text-sm">
             </div>
-            <div class="border p-3 rounded-2xl min-w-[100px] text-center bg-gray-50">
-                <p class="font-bold">مريح</p>
-                <p class="text-gray-500 text-sm">45 ريال</p>
+            <div class="flex items-center bg-gray-100 p-3 rounded-xl border border-gray-200">
+                <span class="text-red-600 mr-2 ml-2 text-lg">📍</span>
+                <input type="text" id="dest" placeholder="حدد الوجهة" class="bg-transparent w-full focus:outline-none text-sm">
             </div>
         </div>
 
-        <button onclick="sendOrder()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold text-lg shadow-lg">تأكيد الرحلة</button>
+        <h3 class="font-bold text-gray-800 mb-3 text-sm">اختر نوع الرحلة:</h3>
+        <div class="grid grid-cols-1 gap-2 mb-6">
+            <div onclick="selectCar(this, 'Ride Economy', 2.5)" class="car-card selected flex items-center justify-between p-3 rounded-xl">
+                <div class="flex items-center">
+                    <span class="text-3xl ml-3">🚕</span>
+                    <div>
+                        <p class="font-bold">Ride Economy</p>
+                        <p class="text-xs text-gray-500 italic">أسرع وأرخص خيار</p>
+                    </div>
+                </div>
+                <p class="font-black text-blue-700" id="price-econ">20 ريال</p>
+            </div>
+            
+            <div onclick="selectCar(this, 'Ride Comfort', 4)" class="car-card flex items-center justify-between p-3 rounded-xl">
+                <div class="flex items-center">
+                    <span class="text-3xl ml-3">🚙</span>
+                    <div>
+                        <p class="font-bold">Ride Comfort</p>
+                        <p class="text-xs text-gray-500 italic">سيارات أحدث ومساحة أكبر</p>
+                    </div>
+                </div>
+                <p class="font-black text-blue-700" id="price-comfort">35 ريال</p>
+            </div>
+        </div>
+
+        <button onclick="requestRide()" class="w-full bg-black text-white p-4 rounded-xl font-bold text-lg hover:bg-gray-800 transition shadow-xl">
+            طلب RideNow
+        </button>
+
+        <div class="mt-4 flex justify-center space-x-4 border-t pt-4">
+            <button onclick="window.open('https://wa.me/966575376680')" class="text-xs text-gray-500">💬 مساعدة</button>
+            <button class="text-xs text-gray-500">💳 كاش</button>
+        </div>
     </div>
 
     <script>
         // تشغيل الخريطة
-        var map = L.map('map').setView([24.7136, 46.6753], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        var marker = L.marker([24.7136, 46.6753], {draggable: true}).addTo(map);
+        var map = L.map('map', { zoomControl: false }).setView([24.7136, 46.6753], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        function sendOrder() {
-            let p = document.getElementById('pickup').value;
-            let d = document.getElementById('dest').value;
-            let msg = `طلب جديد: من ${p} إلى ${d}`;
-            window.open(`https://wa.me/0575376680?text=${encodeURIComponent(msg)}`);
+        let selectedType = 'Ride Economy';
+        let baseRate = 2.5;
+
+        function selectCar(element, type, rate) {
+            document.querySelectorAll('.car-card').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            selectedType = type;
+            baseRate = rate;
+        }
+
+        function requestRide() {
+            const p = document.getElementById('pickup').value;
+            const d = document.getElementById('dest').value;
+
+            if(!p || !d) {
+                alert('المرجو تحديد الوجهة أولاً');
+                return;
+            }
+
+            const message = `🚕 طلب رحلة جديد (Pro):
+---------------------------
+📍 الانطلاق: ${p}
+🏁 الوجهة: ${d}
+🚗 الفئة: ${selectedType}
+💳 طريقة الدفع: كاش
+---------------------------
+يرجى تأكيد الاستلام من السائق.`;
+
+            window.open(`https://wa.me/966575376680?text=${encodeURIComponent(message)}`);
         }
     </script>
 </body>
