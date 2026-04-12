@@ -5,38 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RideNow - اطلب رحلتك</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <style> #map { height: 300px; border-radius: 20px; margin-bottom: 15px; } </style>
 </head>
-<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen p-4">
-
-    <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
-        <h1 class="text-3xl font-black text-center mb-8 text-blue-400">RideNow 🚕</h1>
-        
-        <div class="space-y-6">
-            <div>
-                <label class="block text-sm font-medium mb-2">رقم الهاتف</label>
-                <input type="tel" id="phone" placeholder="0600000000" 
-                    class="w-full p-4 rounded-xl bg-slate-700 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium mb-2">إلى أين تريد الذهاب؟</label>
-                <input type="text" id="destination" placeholder="مثلاً: وسط المدينة" 
-                    class="w-full p-4 rounded-xl bg-slate-700 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-
-            <button onclick="sendOrder()" id="orderBtn"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg active:scale-95">
-                البحث عن سائق
-            </button>
-            
-            <p id="status" class="text-center text-sm text-slate-400 hidden">جاري إرسال طلبك...</p>
+<body class="bg-slate-900 text-white p-4">
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-black text-blue-400 text-center mb-4 italic">RIDENOW 🚕</h1>
+        <div id="map"></div>
+        <div class="bg-slate-800 p-6 rounded-3xl shadow-xl border border-slate-700 space-y-4">
+            <input type="tel" id="phone" placeholder="رقم الهاتف" class="w-full p-4 rounded-2xl bg-slate-700 border-none">
+            <input type="text" id="destination" placeholder="فين غادي؟ (اضغط على الخريطة لتحديد الوجهة)" class="w-full p-4 rounded-2xl bg-slate-700 border-none" readonly>
+            <div id="price-tag" class="text-center font-bold text-blue-400 text-xl hidden">الثمن: <span id="amt">0</span> درهم</div>
+            <button onclick="sendRequest()" id="reqBtn" class="w-full bg-blue-600 py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-all">طلب الآن</button>
+            <p id="status" class="text-center text-yellow-400 font-bold hidden">جاري البحث عن سائق...</p>
         </div>
     </div>
 
     <script>
-        // الإعدادات الخاصة بـ Firebase ديالك
         const firebaseConfig = {
             apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo",
             authDomain: "ridenowapp-eadf0.firebaseapp.com",
@@ -46,41 +35,55 @@
             messagingSenderId: "184047350605",
             appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04"
         };
-
-        // تفعيل Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        function sendOrder() {
+        let map = L.map('map').setView([33.5731, -7.5898], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let userPos, destPos, routeControl;
+
+        navigator.geolocation.getCurrentPosition(p => {
+            userPos = [p.coords.latitude, p.coords.longitude];
+            map.setView(userPos, 15);
+            L.marker(userPos).addTo(map).bindPopup("موقعك").openPopup();
+        });
+
+        map.on('click', e => {
+            destPos = e.latLng;
+            if(routeControl) map.removeControl(routeControl);
+            routeControl = L.Routing.control({
+                waypoints: [L.latLng(userPos[0], userPos[1]), destPos],
+                createMarker: function() { return null; }
+            }).on('routesfound', ev => {
+                let dist = ev.routes[0].summary.totalDistance / 1000;
+                let price = Math.round(dist * 6) + 10;
+                document.getElementById('price-tag').classList.remove('hidden');
+                document.getElementById('amt').innerText = price;
+                document.getElementById('destination').value = "وجهة محددة على الخريطة";
+                window.finalPrice = price;
+            }).addTo(map);
+        });
+
+        function sendRequest() {
             const phone = document.getElementById('phone').value;
-            const destination = document.getElementById('destination').value;
-            const btn = document.getElementById('orderBtn');
-            const status = document.getElementById('status');
+            if(!phone || !destPos) return alert("دخل رقمك وحدد الوجهة في الخريطة!");
+            
+            const id = "req_" + Date.now();
+            database.ref('orders/' + id).set({
+                phone, price: window.finalPrice,
+                lat: userPos[0], lng: userPos[1],
+                dLat: destPos.lat, dLng: destPos.lng,
+                status: 'waiting'
+            });
 
-            if (phone && destination) {
-                btn.disabled = true;
-                btn.innerText = "تم إرسال الطلب ✅";
-                status.classList.remove('hidden');
-
-                // إرسال البيانات لـ Firebase
-                const newOrderRef = database.ref('orders').push();
-                newOrderRef.set({
-                    phone: phone,
-                    destination: destination,
-                    status: "waiting",
-                    time: new Date().toLocaleTimeString()
-                }).then(() => {
-                    alert("طلبك وصل! السائق غايتصل بيك قريباً.");
-                }).catch((error) => {
-                    alert("وقع مشكل: " + error.message);
-                    btn.disabled = false;
-                    btn.innerText = "البحث عن سائق";
-                });
-            } else {
-                alert("عافاك عمر المعلومات كاملة");
-            }
+            document.getElementById('status').classList.remove('hidden');
+            database.ref('orders/' + id + '/status').on('value', s => {
+                if(s.val() === 'accepted') {
+                    document.getElementById('status').innerText = "✅ السائق قبل طلبك! سيتصل بك قريباً.";
+                    document.getElementById('status').className = "text-center text-green-400 font-bold";
+                }
+            });
         }
     </script>
 </body>
 </html>
-
