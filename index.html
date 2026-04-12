@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RideNow - تطبيق التوصيل</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: 350px; width: 100%; border-radius: 20px; z-index: 1; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <header class="bg-white p-4 shadow-md flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-blue-600">RideNow</h1>
+        <div class="bg-gray-200 p-2 rounded-full">👤</div>
+    </header>
+
+    <div class="p-4">
+        <div id="map" class="shadow-lg border-2 border-white"></div>
+    </div>
+
+    <div class="fixed bottom-0 left-0 right-0 bg-white p-6 rounded-t-[30px] shadow-2xl">
+        <div class="space-y-3">
+            <input type="text" id="pickup" placeholder="📍 مكان الانطلاق" class="w-full p-4 bg-gray-50 border rounded-2xl">
+            <input type="text" id="dest" placeholder="🏁 إلى أين؟" class="w-full p-4 bg-gray-50 border rounded-2xl">
+        </div>
+
+        <div class="flex gap-3 my-4 overflow-x-auto">
+            <div class="border-2 border-blue-500 bg-blue-50 p-3 rounded-2xl min-w-[100px] text-center">
+                <p class="font-bold">اقتصادي</p>
+                <p class="text-blue-600 text-sm">20 ريال</p>
+            </div>
+            <div class="border p-3 rounded-2xl min-w-[100px] text-center bg-gray-50">
+                <p class="font-bold">مريح</p>
+                <p class="text-gray-500 text-sm">45 ريال</p>
+            </div>
+        </div>
+
+        <button onclick="sendOrder()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold text-lg shadow-lg">تأكيد الرحلة</button>
+    </div>
+
+    <script>
+        // تشغيل الخريطة
+        var map = L.map('map').setView([24.7136, 46.6753], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        var marker = L.marker([24.7136, 46.6753], {draggable: true}).addTo(map);
+
+        function sendOrder() {
+            let p = document.getElementById('pickup').value;
+            let d = document.getElementById('dest').value;
+            let msg = `طلب جديد: من ${p} إلى ${d}`;
+            window.open(`https://wa.me/0575376680?text=${encodeURIComponent(msg)}`);
+        }
+    </script>
+</body>
+</html>
