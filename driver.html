@@ -1,90 +1,65 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8"><title>RIDENOW</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8"><title>الكابتن</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    <style>
-        .uber-input { @apply w-full p-4 bg-slate-800 rounded-xl border-none text-white mb-2 shadow-inner; }
-        .pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(234, 179, 8, 0); } 100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); } }
-    </style>
 </head>
-<body class="bg-black text-white overflow-hidden">
+<body class="bg-black text-white">
+    <div id="start-screen" class="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center p-6 text-center">
+        <div>
+            <h1 class="text-3xl font-black mb-6">نظام الكابتن 🚕</h1>
+            <button onclick="startDriver()" class="bg-yellow-500 text-black px-12 py-5 rounded-2xl font-black text-xl shadow-xl">ابدأ استقبال الطلبات 🔔</button>
+        </div>
+    </div>
+
     <div id="map" class="h-screen w-full"></div>
-
-    <div id="panel" class="fixed bottom-0 w-full bg-slate-900 p-6 rounded-t-[2rem] shadow-2xl z-50">
-        <div id="request-flow">
-            <input type="text" id="user-name" placeholder="👤 اسمك" class="uber-input">
-            <input type="tel" id="phone" placeholder="📞 رقم الجوال" class="uber-input">
-            <div id="fare-box" class="hidden flex justify-between p-4 bg-yellow-500/10 rounded-xl mb-4 border border-yellow-500/20">
-                <span class="font-bold text-slate-400">السعر المقدر</span>
-                <span class="text-xl font-black text-yellow-500"><span id="fare">0</span> SAR</span>
-            </div>
-            <button onclick="requestRide()" id="req-btn" class="w-full bg-yellow-500 py-4 rounded-xl text-black font-black text-lg pulse">اطلب الآن 🚕</button>
-        </div>
-
-        <div id="searching" class="hidden py-8 text-center">
-            <div class="inline-block p-4 bg-yellow-500 rounded-full mb-4 animate-bounce">🚕</div>
-            <h2 class="text-xl font-black text-yellow-500">جاري البحث عن كابتن قريب...</h2>
-        </div>
+    <div id="order-popup" class="hidden fixed bottom-10 left-4 right-4 bg-slate-900 border-2 border-yellow-500 p-6 rounded-[2rem] shadow-2xl z-50 animate-bounce">
+        <h2 id="c-name" class="text-2xl font-black mb-2">طلب جديد!</h2>
+        <p id="c-price" class="text-3xl font-black text-yellow-500 mb-4">0 SAR</p>
+        <button id="accept-btn" class="w-full bg-green-600 py-4 rounded-xl font-bold text-xl">قـبـول ✅</button>
     </div>
 
     <script>
         const firebaseConfig = { apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo", authDomain: "ridenowapp-eadf0.firebaseapp.com", projectId: "ridenowapp-eadf0", databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com", storageBucket: "ridenowapp-eadf0.appspot.com", messagingSenderId: "184047350605", appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-
+        let audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
         let map = L.map('map', {zoomControl: false}).setView([24.7136, 46.6753], 13);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        let uPos, dest, driverMarkers = {};
-
-        // رادار السائقين المباشر
-        db.ref('online_drivers').on('value', snap => {
-            Object.values(driverMarkers).forEach(m => map.removeLayer(m));
-            snap.forEach(child => {
-                const d = child.val();
-                driverMarkers[child.key] = L.marker([d.lat, d.lng], {
-                    icon: L.divIcon({html: '<div class="text-2xl">🚕</div>', className: 'car'})
-                }).addTo(map);
+        function startDriver() {
+            document.getElementById('start-screen').remove();
+            navigator.geolocation.watchPosition(p => {
+                const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+                map.setView([pos.lat, pos.lng], 15);
+                db.ref('online_drivers/d1').set(pos);
             });
-        });
+            listenOrders();
+        }
 
-        navigator.geolocation.getCurrentPosition(p => {
-            uPos = [p.coords.latitude, p.coords.longitude];
-            map.setView(uPos, 15);
-            L.circleMarker(uPos, {color: '#eab308', radius: 10, fillOpacity: 0.8}).addTo(map);
-        });
-
-        map.on('click', e => {
-            dest = e.latlng;
-            L.marker(dest).addTo(map);
-            const dist = map.distance(uPos, dest) / 1000;
-            const price = Math.floor(7 + (dist * 2.5));
-            document.getElementById('fare-box').classList.remove('hidden');
-            document.getElementById('fare').innerText = price;
-        });
-
-        function requestRide() {
-            const name = document.getElementById('user-name').value;
-            const ph = document.getElementById('phone').value;
-            if(!name || !ph || !dest) return alert("سجل بياناتك وحدد الموقع!");
-            
-            const oid = "ord_" + Date.now();
-            db.ref('orders/' + oid).set({ name, ph, price: document.getElementById('fare').innerText, lat: uPos[0], lng: uPos[1], status: 'waiting' });
-            document.getElementById('request-flow').classList.add('hidden');
-            document.getElementById('searching').classList.remove('hidden');
-
-            db.ref('orders/' + oid).on('value', s => {
-                if(s.val().status === 'accepted') alert("الكابتن في الطريق!");
+        function listenOrders() {
+            db.ref('orders').on('value', snap => {
+                snap.forEach(child => {
+                    const o = child.val();
+                    if(o.status === 'waiting') {
+                        audio.play();
+                        document.getElementById('order-popup').classList.remove('hidden');
+                        document.getElementById('c-name').innerText = o.name;
+                        document.getElementById('c-price').innerText = o.price + " SAR";
+                        document.getElementById('accept-btn').onclick = () => {
+                            db.ref('orders/' + child.key).update({status: 'accepted'});
+                            alert("تم قبول الطلب!");
+                            location.reload();
+                        };
+                    }
+                });
             });
         }
     </script>
 </body>
 </html>
-
