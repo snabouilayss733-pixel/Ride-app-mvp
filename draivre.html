@@ -1,91 +1,29 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <title>وصلني للكابتن</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-</head>
-<body class="bg-black text-white">
-  <div id="login-screen" class="fixed inset-0 bg-slate-900 z-[200] flex items-center justify-center p-6">
-    <div class="w-full max-w-sm text-center">
-      <h1 class="text-4xl font-black mb-2 text-yellow-500">وصلني كابتن</h1>
-      <input id="name" type="text" placeholder="اسمك الثلاثي" class="w-full p-4 rounded-xl mb-2 bg-gray-800 text-white">
-      <input id="car" type="text" placeholder="نوع السيارة + الموديل" class="w-full p-4 rounded-xl mb-2 bg-gray-800 text-white">
-      <input id="phone" type="tel" placeholder="رقم الجوال 05X" class="w-full p-4 rounded-xl mb-4 bg-gray-800 text-white">
-      <div id="recaptcha-container"></div>
-      <button id="login-btn" class="w-full bg-yellow-500 text-black py-4 rounded-xl font-bold text-lg">تسجيل الدخول</button>
-    </div>
-  </div>
-  <div id="app" class="hidden">
-    <div id="map" class="h-screen w-full"></div>
-    <div id="status-bar" class="fixed top-4 left-4 right-4 bg-green-600 p-3 rounded-xl text-center font-bold">متصل - متاح للطلبات</div>
-    <div id="order-popup" class="hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t-4 border-yellow-500 p-6 rounded-t-3xl z-">
-      <audio id="notif-sound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_2c2fc0c1b0.mp3"></audio>
-      <p class="text-center text-gray-400">طلب جديد</p>
-      <p id="c-price" class="text-5xl font-black text-green-400 text-center my-4"></p>
-      <div class="bg-gray-800 p-3 rounded-xl mb-4">
-        <p id="c-to" class="font-bold"></p>
-      </div>
-      <div class="grid grid-cols-2 gap-4">
-        <button onclick="rejectRide()" class="bg-gray-700 py-4 rounded-xl font-bold">رفض</button>
-        <button onclick="acceptRide()" class="bg-green-600 py-4 rounded-xl font-bold">قبول المشوار</button>
-      </div>
-    </div>
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo",
-      authDomain: "ridenowapp-eadf0.firebaseapp.com",
-      databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com",
-      projectId: "ridenowapp-eadf0",
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth(); const db = firebase.database();
-    let driverId = null, currentRideId = null;
-    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
-    document.getElementById('login-btn').onclick = () => {
-      const phone = '+966' + document.getElementById('phone').value.replace(/\D/g, '').slice(-9);
-      auth.signInWithPhoneNumber(phone, window.recaptchaVerifier).then(conf => {
-        const code = prompt('ادخل كود التحقق');
-        conf.confirm(code).then(res => {
-          driverId = res.user.uid;
-          db.ref('drivers/' + driverId).set({
-            name: document.getElementById('name').value, car: document.getElementById('car').value,
-            phone: phone, available: true, rating: 5.0
-          });
-          startDriverApp();
-        });
-      });
-    };
-    function startDriverApp() {
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('app').classList.remove('hidden');
-      const map = L.map('map').setView([24.7136, 46.6753], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-      navigator.geolocation.watchPosition(pos => {
-        db.ref('drivers/' + driverId).update({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      });
-      db.ref('drivers/' + driverId).onDisconnect().remove();
-      db.ref('rides').orderByChild('status').equalTo('searching').on('child_added', snap => {
-        const ride = snap.val(); currentRideId = snap.key;
-        document.getElementById('notif-sound').play();
-        document.getElementById('order-popup').classList.remove('hidden');
-        document.getElementById('c-price').innerText = ride.price + ' ريال';
-        document.getElementById('c-to').innerText = 'إلى: ' + ride.dropoff;
-      });
-    }
-    function acceptRide() {
-      db.ref('rides/' + currentRideId).update({ status: 'accepted', driverId: driverId });
-      db.ref('drivers/' + driverId).update({ available: false });
-      document.getElementById('order-popup').classList.add('hidden');
-      document.getElementById('status-bar').innerText = 'عندك مشوار - توجه للراكب';
-    }
-    function rejectRide() { document.getElementById('order-popup').classList.add('hidden'); }
-  </script>
-</body>
-</html>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+  import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+  import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCbDSl0sn0DyAsVdM3eDDpx0c46Xvi0L38",
+    authDomain: "ride-app-1626f.firebaseapp.com",
+    databaseURL: "https://ride-app-1626f-default-rtdb.firebaseio.com",
+    projectId: "ride-app-1626f",
+    storageBucket: "ride-app-1626f.firebasestorage.app",
+    messagingSenderId: "1031650858685",
+    appId: "1:1031650858685:web:65e73d04d08af4a19549d4",
+    measurementId: "G-Z3YQ4E2MWE"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const database = getDatabase(app);
+  
+  window.auth = auth;
+  window.database = database;
+  window.RecaptchaVerifier = RecaptchaVerifier;
+  window.signInWithPhoneNumber = signInWithPhoneNumber;
+  window.ref = ref;
+  window.set = set;
+  window.onValue = onValue;
+  window.update = update;
+</script>
