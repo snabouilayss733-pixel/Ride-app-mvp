@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8"><title>لوحة الكابتن - RIDENOW</title>
+    <meta charset="UTF-8"><title>RIDENOW - الكابتن</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -9,47 +9,24 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-white font-sans overflow-hidden">
-    <audio id="alert-sound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
+<body class="bg-slate-950 text-white">
+    <div id="sound-fix" class="fixed inset-0 bg-black z-[100] flex items-center justify-center">
+        <button onclick="initDriver()" class="bg-yellow-500 p-6 rounded-2xl text-black font-black">تشغيل نظام الكابتن 🔔</button>
+    </div>
 
-    <div class="flex flex-col h-screen relative">
-        <div id="map" class="flex-grow z-0"></div>
-
-        <div id="driver-ui" class="absolute bottom-0 w-full bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl border-t border-yellow-500/30 z-10">
-            <div id="no-orders" class="text-center py-4 text-slate-500 font-bold italic">بانتظار طلبات المشاوير... 📡</div>
-
-            <div id="active-order" class="hidden space-y-4">
-                <div class="flex justify-between items-center bg-yellow-600/10 p-4 rounded-2xl border border-yellow-500/20">
-                    <div>
-                        <p class="text-[10px] text-slate-400 font-bold uppercase">العميل:</p>
-                        <h3 id="p-name" class="text-xl font-black text-white">---</h3>
-                    </div>
-                    <div class="text-right">
-                        <span id="p-price" class="text-2xl font-black text-yellow-500">0 SAR</span>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <button onclick="openInGoogleMaps()" class="bg-blue-600 flex flex-col items-center justify-center py-4 rounded-2xl active:scale-95 shadow-lg">
-                        <span class="text-2xl mb-1">📍</span>
-                        <span class="text-[10px] font-bold">موقع الراكب</span>
-                    </button>
-                    <a id="p-call" href="tel:" class="bg-slate-800 flex flex-col items-center justify-center py-4 rounded-2xl border border-slate-700 active:scale-95">
-                        <span class="text-2xl mb-1">📞</span>
-                        <span class="text-[10px] font-bold">اتصال بالعميل</span>
-                    </a>
-                </div>
-
-                <div id="status-btns" class="space-y-2">
-                    <button onclick="acceptBtn()" id="accept-btn" class="w-full bg-green-600 py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">قـبول الطلب ✅</button>
-                    <div id="trip-manage" class="hidden grid grid-cols-2 gap-2">
-                        <button onclick="confirmPickup()" class="bg-yellow-600 py-4 rounded-xl font-bold">تم الإركاب 🚗</button>
-                        <button onclick="finishTrip()" class="bg-green-700 py-4 rounded-xl font-bold">إنهاء المشوار 🏁</button>
-                    </div>
-                </div>
-                
-                <button onclick="cancelByDriver()" class="w-full text-red-500 text-xs font-bold py-2">إلغاء الطلب 🚫</button>
+    <div id="map" class="h-screen w-full"></div>
+    <div id="driver-ui" class="fixed bottom-0 w-full bg-slate-900 p-6 rounded-t-[3rem] border-t border-yellow-500/30">
+        <div id="waiting-msg" class="text-center animate-pulse text-slate-500">بانتظار طلبات جديدة...</div>
+        <div id="order-card" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="customer-name" class="text-2xl font-black text-white">---</h2>
+                <span id="order-price" class="text-2xl font-black text-yellow-500">0 SAR</span>
             </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button id="nav-btn" class="bg-blue-600 py-4 rounded-xl">📍 موقع الراكب</button>
+                <button onclick="acceptOrder()" class="bg-green-600 py-4 rounded-xl font-bold">قبول الطلب ✅</button>
+            </div>
+            <button onclick="finishTrip()" id="finish-btn" class="hidden w-full bg-yellow-600 mt-2 py-4 rounded-xl text-black font-black">إنهاء المشوار 🏁</button>
         </div>
     </div>
 
@@ -57,72 +34,46 @@
         const firebaseConfig = { apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo", authDomain: "ridenowapp-eadf0.firebaseapp.com", projectId: "ridenowapp-eadf0", databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com", storageBucket: "ridenowapp-eadf0.appspot.com", messagingSenderId: "184047350605", appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04" };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-
-        let map = L.map('map', {zoomControl: false}).setView([24.7136, 46.6753], 13); // الرياض
+        
+        let map = L.map('map', {zoomControl: false}).setView([24.7136, 46.6753], 13);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        let dId = "driver_" + Math.floor(Math.random()*1000);
+        let audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+        let currentOrderId;
 
-        let dPos, currentOrderId, pLat, pLng;
-
-        navigator.geolocation.getCurrentPosition(p => {
-            dPos = [p.coords.latitude, p.coords.longitude];
-            map.setView(dPos, 16);
-            L.circleMarker(dPos, {color: '#eab308', radius: 10, fillOpacity: 1}).addTo(map);
-        });
-
-        database.ref('orders').on('value', snap => {
-            let found = false;
-            snap.forEach(child => {
-                const o = child.val();
-                if(o.status === 'waiting' || (o.status === 'accepted' && currentOrderId === child.key) || (o.status === 'in_progress' && currentOrderId === child.key)) {
-                    found = true;
-                    if(o.status === 'waiting' && currentOrderId !== child.key) {
-                        document.getElementById('alert-sound').play(); // رنين التنبيه
-                    }
-                    currentOrderId = child.key;
-                    pLat = o.lat; pLng = o.lng;
-                    
-                    document.getElementById('no-orders').classList.add('hidden');
-                    document.getElementById('active-order').classList.remove('hidden');
-                    document.getElementById('p-name').innerText = o.name;
-                    document.getElementById('p-price').innerText = o.price + " SAR";
-                    document.getElementById('p-call').href = "tel:" + o.ph;
-
-                    if(o.status === 'accepted' || o.status === 'in_progress') {
-                        document.getElementById('accept-btn').classList.add('hidden');
-                        document.getElementById('trip-manage').classList.remove('hidden');
-                    }
-                }
+        function initDriver() {
+            document.getElementById('sound-fix').remove();
+            navigator.geolocation.watchPosition(p => {
+                const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+                map.setView([pos.lat, pos.lng], 15);
+                database.ref('drivers_online/' + dId).set(pos);
             });
-            if(!found) location.reload(); 
-        });
-
-        function acceptBtn() {
-            database.ref('orders/' + currentOrderId).update({status: 'accepted'});
         }
 
-        function confirmPickup() {
-            database.ref('orders/' + currentOrderId).update({status: 'in_progress'});
-            alert("تم تأكيد ركوب العميل. رافقتكم السلامة!");
+        database.ref('orders').on('value', snap => {
+            snap.forEach(child => {
+                const o = child.val();
+                if(o.status === 'waiting') {
+                    audio.play();
+                    currentOrderId = child.key;
+                    document.getElementById('waiting-msg').classList.add('hidden');
+                    document.getElementById('order-card').classList.remove('hidden');
+                    document.getElementById('customer-name').innerText = o.name;
+                    document.getElementById('order-price').innerText = o.price + " SAR";
+                    document.getElementById('nav-btn').onclick = () => window.open(`https://www.google.com/maps?q=${o.lat},${o.lng}`);
+                }
+            });
+        });
+
+        function acceptOrder() {
+            database.ref('orders/' + currentOrderId).update({status: 'accepted'});
+            document.getElementById('finish-btn').classList.remove('hidden');
         }
 
         function finishTrip() {
             database.ref('orders/' + currentOrderId).update({status: 'completed'});
-            alert("تم إنهاء المشوار بنجاح!");
             location.reload();
-        }
-
-        function openInGoogleMaps() {
-            window.open(`https://www.google.com/maps?q=${pLat},${pLng}`, '_blank');
-        }
-
-        function cancelByDriver() {
-            if(confirm("هل أنت متأكد من إلغاء الطلب؟")) {
-                database.ref('orders/' + currentOrderId).update({status: 'waiting'});
-                location.reload();
-            }
         }
     </script>
 </body>
-</html> 
-
-   
+</html>
