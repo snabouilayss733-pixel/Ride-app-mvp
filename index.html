@@ -1,88 +1,31 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RideNow - اطلب رحلتك</title>
+    <meta charset="UTF-8"><title>الراكب - RideNow</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    <style> #map { height: 300px; border-radius: 20px; margin-bottom: 15px; } </style>
 </head>
 <body class="bg-slate-900 text-white p-4">
-    <div class="max-w-md mx-auto">
-        <h1 class="text-2xl font-black text-blue-400 text-center mb-4 italic">RIDENOW 🚕</h1>
-        <div id="map"></div>
-        <div class="bg-slate-800 p-6 rounded-3xl shadow-xl border border-slate-700 space-y-4">
-            <input type="tel" id="phone" placeholder="رقم الهاتف" class="w-full p-4 rounded-2xl bg-slate-700 border-none">
-            <input type="text" id="destination" placeholder="فين غادي؟ (اضغط على الخريطة لتحديد الوجهة)" class="w-full p-4 rounded-2xl bg-slate-700 border-none" readonly>
-            <div id="price-tag" class="text-center font-bold text-blue-400 text-xl hidden">الثمن: <span id="amt">0</span> درهم</div>
-            <button onclick="sendRequest()" id="reqBtn" class="w-full bg-blue-600 py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-all">طلب الآن</button>
-            <p id="status" class="text-center text-yellow-400 font-bold hidden">جاري البحث عن سائق...</p>
-        </div>
-    </div>
-
+    <div id="map" class="h-64 rounded-2xl mb-4 border border-slate-700"></div>
+    <input type="tel" id="phone" placeholder="رقم هاتفك" class="w-full p-4 mb-4 rounded-xl bg-slate-800 border-none">
+    <button onclick="sendOrder()" class="w-full bg-blue-600 py-4 rounded-xl font-bold">اطلب الآن</button>
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo",
-            authDomain: "ridenowapp-eadf0.firebaseapp.com",
-            projectId: "ridenowapp-eadf0",
-            databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com",
-            storageBucket: "ridenowapp-eadf0.appspot.com",
-            messagingSenderId: "184047350605",
-            appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04"
-        };
+        const firebaseConfig = { apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo", authDomain: "ridenowapp-eadf0.firebaseapp.com", projectId: "ridenowapp-eadf0", databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com", storageBucket: "ridenowapp-eadf0.appspot.com", messagingSenderId: "184047350605", appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04" };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-
         let map = L.map('map').setView([33.5731, -7.5898], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        let userPos, destPos, routeControl;
-
-        navigator.geolocation.getCurrentPosition(p => {
-            userPos = [p.coords.latitude, p.coords.longitude];
-            map.setView(userPos, 15);
-            L.marker(userPos).addTo(map).bindPopup("موقعك").openPopup();
-        });
-
-        map.on('click', e => {
-            destPos = e.latLng;
-            if(routeControl) map.removeControl(routeControl);
-            routeControl = L.Routing.control({
-                waypoints: [L.latLng(userPos[0], userPos[1]), destPos],
-                createMarker: function() { return null; }
-            }).on('routesfound', ev => {
-                let dist = ev.routes[0].summary.totalDistance / 1000;
-                let price = Math.round(dist * 6) + 10;
-                document.getElementById('price-tag').classList.remove('hidden');
-                document.getElementById('amt').innerText = price;
-                document.getElementById('destination').value = "وجهة محددة على الخريطة";
-                window.finalPrice = price;
-            }).addTo(map);
-        });
-
-        function sendRequest() {
+        let userPos;
+        navigator.geolocation.getCurrentPosition(p => { userPos = [p.coords.latitude, p.coords.longitude]; map.setView(userPos, 15); L.marker(userPos).addTo(map); });
+        function sendOrder() {
             const phone = document.getElementById('phone').value;
-            if(!phone || !destPos) return alert("دخل رقمك وحدد الوجهة في الخريطة!");
-            
-            const id = "req_" + Date.now();
-            database.ref('orders/' + id).set({
-                phone, price: window.finalPrice,
-                lat: userPos[0], lng: userPos[1],
-                dLat: destPos.lat, dLng: destPos.lng,
-                status: 'waiting'
-            });
-
-            document.getElementById('status').classList.remove('hidden');
-            database.ref('orders/' + id + '/status').on('value', s => {
-                if(s.val() === 'accepted') {
-                    document.getElementById('status').innerText = "✅ السائق قبل طلبك! سيتصل بك قريباً.";
-                    document.getElementById('status').className = "text-center text-green-400 font-bold";
-                }
-            });
+            if(phone && userPos) {
+                database.ref('orders/' + Date.now()).set({ phone, lat: userPos[0], lng: userPos[1], status: 'waiting' });
+                alert("تم إرسال الطلب! السائقين سيظهر لهم موقعك.");
+            }
         }
     </script>
 </body>
