@@ -1,138 +1,29 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <title>وصلني - تطبيق توصيل الركاب</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <style>
-.leaflet-popup-content { direction: rtl; font-family: 'Tajawal', sans-serif; }
-   @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
-   body { font-family: 'Tajawal', sans-serif; }
-  </style>
-</head>
-<body class="bg-gray-100">
-  <div id="login-screen" class="fixed inset-0 bg-white z-[200] flex items-center justify-center p-6">
-    <div class="w-full max-w-sm text-center">
-      <h1 class="text-4xl font-black mb-2 text-green-600">وصلني</h1>
-      <p class="text-gray-500 mb-8">تطبيق التوصيل الأول في السعودية</p>
-      <input id="phone" type="tel" placeholder="5X XXX XXXX" class="w-full p-4 border rounded-xl mb-4 text-center text-lg">
-      <div id="recaptcha-container" class="mb-4"></div>
-      <button id="send-otp" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg">إرسال كود التحقق</button>
-      <div id="otp-div" class="hidden mt-4">
-        <input id="otp" type="tel" placeholder="ادخل كود التحقق" class="w-full p-4 border rounded-xl mb-4 text-center text-lg">
-        <button onclick="verifyOTP()" class="w-full bg-black text-white py-4 rounded-xl font-bold text-lg">تأكيد الدخول</button>
-      </div>
-    </div>
-  </div>
-  <div id="app" class="hidden">
-    <div id="map" class="h-screen w-full"></div>
-    <div class="fixed bottom-0 left-0 right-0 bg-white p-4 rounded-t-3xl shadow-2xl">
-      <div id="home-screen">
-        <h2 class="text-lg font-bold mb-3">وين ودك تروح اليوم؟</h2>
-        <input id="dropoff" type="text" placeholder="ابحث عن وجهة" class="w-full p-4 border rounded-xl mb-3">
-        <div id="car-types" class="grid grid-cols-3 gap-2 mb-3"></div>
-        <button onclick="confirmRide()" class="w-full bg-black text-white py-4 rounded-xl font-bold text-lg">تأكيد وصلني</button>
-      </div>
-      <div id="waiting-screen" class="hidden text-center">
-        <p class="font-bold text-lg mb-2">نبحث لك عن أقرب كابتن...</p>
-        <p id="price-final" class="text-3xl font-black text-green-600 mb-4"></p>
-      </div>
-      <div id="ride-screen" class="hidden">
-        <div class="flex items-center gap-4 mb-3">
-          <img src="https://i.pravatar.cc/100" class="w-14 h-14 rounded-full">
-          <div>
-            <p id="driver-name" class="font-bold text-lg"></p>
-            <p id="driver-car" class="text-gray-500 text-sm"></p>
-          </div>
-          <a id="driver-phone" href="tel:" class="mr-auto bg-green-100 p-3 rounded-full">📞</a>
-          <button onclick="sos()" class="bg-red-100 p-3 rounded-full">🆘</button>
-        </div>
-        <button onclick="finishRide()" class="w-full bg-red-600 text-white py-4 rounded-xl font-bold text-lg">إنهاء الرحلة</button>
-      </div>
-    </div>
-  </div>
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo",
-      authDomain: "ridenowapp-eadf0.firebaseapp.com",
-      databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com",
-      projectId: "ridenowapp-eadf0",
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
-    let user = null, userLat = 24.7136, userLng = 46.6753, map, currentRideId = null;
-    const PRICING = { base: 12, per_km: 2.1, per_min: 0.5, types: { 'اقتصادي': 1, 'عائلي': 1.4, 'VIP': 2 } };
-    let selectedCar = 'اقتصادي';
-    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
-    document.getElementById('send-otp').onclick = () => {
-      const phone = '+966' + document.getElementById('phone').value.replace(/\D/g, '').slice(-9);
-      auth.signInWithPhoneNumber(phone, window.recaptchaVerifier).then(conf => {
-          window.confirmationResult = conf;
-          document.getElementById('otp-div').classList.remove('hidden');
-        }).catch(e => alert('خطأ: تأكد من الرقم'));
-    };
-    function verifyOTP() {
-      window.confirmationResult.confirm(document.getElementById('otp').value).then(res => {
-          user = res.user;
-          document.getElementById('login-screen').classList.add('hidden');
-          document.getElementById('app').classList.remove('hidden');
-          initApp();
-        }).catch(e => alert('الكود غلط'));
-    }
-    function initApp() {
-      map = L.map('map').setView([userLat, userLng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-      navigator.geolocation.watchPosition(pos => { userLat = pos.coords.latitude; userLng = pos.coords.longitude; });
-      renderCarTypes();
-    }
-    function renderCarTypes() {
-      const container = document.getElementById('car-types'); container.innerHTML = '';
-      Object.keys(PRICING.types).forEach(type => {
-        const price = (PRICING.base * PRICING.types[type]).toFixed(0);
-        container.innerHTML += `<div onclick="selectCar('${type}')" class="border-2 p-2 rounded-xl text-center cursor-pointer ${type === selectedCar? 'border-black bg-gray-100' : 'border-gray-200'}">
-          <p class="font-bold">${type}</p><p class="text-xs text-gray-500">${price} ريال</p></div>`;
-      });
-    }
-    function selectCar(type) { selectedCar = type; renderCarTypes(); }
-    function confirmRide() {
-      const dropoff = document.getElementById('dropoff').value;
-      if (!dropoff) return alert('حدد الوجهة أول');
-      const distance = Math.random() * 15 + 3; const time = distance * 2;
-      const price = (PRICING.base + distance * PRICING.per_km + time * PRICING.per_min) * PRICING.types[selectedCar];
-      document.getElementById('price-final').innerText = price.toFixed(2) + ' ريال';
-      document.getElementById('home-screen').classList.add('hidden');
-      document.getElementById('waiting-screen').classList.remove('hidden');
-      currentRideId = db.ref('rides').push().key;
-      db.ref('rides/' + currentRideId).set({
-        userId: user.uid, pickup: { lat: userLat, lng: userLng }, dropoff: dropoff,
-        price: price.toFixed(2), carType: selectedCar, status: "searching"
-      });
-      listenForDriver();
-    }
-    function listenForDriver() {
-      db.ref('rides/' + currentRideId).on('value', snap => {
-        const ride = snap.val();
-        if (ride.status === 'accepted') {
-          db.ref('drivers/' + ride.driverId).once('value', driverSnap => {
-            const driver = driverSnap.val();
-            document.getElementById('waiting-screen').classList.add('hidden');
-            document.getElementById('ride-screen').classList.remove('hidden');
-            document.getElementById('driver-name').innerText = driver.name;
-            document.getElementById('driver-car').innerText = driver.car;
-            document.getElementById('driver-phone').href = 'tel:' + driver.phone;
-          });
-        }
-      });
-    }
-    function finishRide() { db.ref('rides/' + currentRideId).update({ status: 'completed' }); alert('شكرا لك!'); location.reload(); }
-    function sos() { alert('تم إرسال موقعك للطوارئ!'); }
-  </script>
-</body>
-</html>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+  import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCbDSl0sn0DyAsVdM3eDDpx0c46Xvi0L38",
+    authDomain: "ride-app-1626f.firebaseapp.com",
+    databaseURL: "https://ride-app-1626f-default-rtdb.firebaseio.com",
+    projectId: "ride-app-1626f",
+    storageBucket: "ride-app-1626f.firebasestorage.app",
+    messagingSenderId: "1031650858685",
+    appId: "1:1031650858685:web:65e73d04d08af4a19549d4",
+    measurementId: "G-Z3YQ4E2MWE"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const database = getDatabase(app);
+  
+  // عشان باقي كودك القديم يشتغل
+  window.auth = auth;
+  window.database = database;
+  window.RecaptchaVerifier = RecaptchaVerifier;
+  window.signInWithPhoneNumber = signInWithPhoneNumber;
+  window.ref = ref;
+  window.set = set;
+  window.onValue = onValue;
+</script>
