@@ -1,33 +1,97 @@
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-  import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
-  import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ride App MVP</title>
+  <style>
+    body { font-family: Arial; background: #f5f5f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 320px; text-align: center; }
+    input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+    button:disabled { background: #ccc; }
+    #recaptcha-container { margin: 10px 0; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>تسجيل الدخول</h2>
+    
+    <div id="phone-step">
+      <input type="tel" id="phoneNumber" placeholder="+9665xxxxxxxx" />
+      <div id="recaptcha-container"></div>
+      <button id="sendCodeBtn">إرسال كود التحقق</button>
+    </div>
 
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyCbDSl0sn0DyAsVdM3eDDpx0c46Xvi0L38",
-    authDomain: "ride-app-1626f.firebaseapp.com",
-    databaseURL: "https://ride-app-1626f-default-rtdb.firebaseio.com",
-    projectId: "ride-app-1626f",
-    storageBucket: "ride-app-1626f.firebasestorage.app",
-    messagingSenderId: "1031650858685",
-    appId: "1:1031650858685:web:65e73d04d08af4a19549d4",
-    measurementId: "G-Z3YQ4E2MWE"
-  };
+    <div id="code-step" class="hidden">
+      <input type="text" id="verificationCode" placeholder="أدخل الكود" />
+      <button id="verifyCodeBtn">تأكيد</button>
+    </div>
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const database = getDatabase(app);
-  
-  // عشان باقي كودك يشتغل
-  window.auth = auth;
-  window.database = database;
-  window.RecaptchaVerifier = RecaptchaVerifier;
-  window.signInWithPhoneNumber = signInWithPhoneNumber;
-  window.ref = ref;
-  window.set = set;
-  window.onValue = onValue;
-  window.update = update;
-</script>
+    <p id="status"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCbDSI0snODyAsVdMk3GD0xp6cX6XvI0L38",
+      authDomain: "ride-app-1626f.firebaseapp.com",
+      databaseURL: "https://ride-app-1626f-default-rtdb.firebaseio.com",
+      projectId: "ride-app-1626f",
+      storageBucket: "ride-app-1626f.firebasestorage.app",
+      messagingSenderId: "1031508305863",
+      appId: "1:1031508305863:web:63573d0408aB4a01954904"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    
+    // تعديل مهم لـ GitHub Pages
+    auth.languageCode = 'ar';
+
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      'size': 'normal',
+      'callback': () => {
+        document.getElementById('sendCodeBtn').disabled = false;
+      }
+    });
+
+    document.getElementById('sendCodeBtn').disabled = true;
+    recaptchaVerifier.render();
+
+    let confirmationResult;
+
+    document.getElementById('sendCodeBtn').onclick = async () => {
+      const phoneNumber = document.getElementById('phoneNumber').value;
+      const status = document.getElementById('status');
+      status.innerText = "جاري الإرسال...";
+      
+      try {
+        confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
+        document.getElementById('phone-step').classList.add('hidden');
+        document.getElementById('code-step').classList.remove('hidden');
+        status.innerText = "تم إرسال الكود";
+      } catch (error) {
+        status.innerText = "خطأ: " + error.message;
+        console.error(error);
+      }
+    };
+
+    document.getElementById('verifyCodeBtn').onclick = async () => {
+      const code = document.getElementById('verificationCode').value;
+      const status = document.getElementById('status');
+      status.innerText = "جاري التحقق...";
+      
+      try {
+        const result = await confirmationResult.confirm(code);
+        status.innerText = "تم تسجيل الدخول بنجاح! ✅ " + result.user.phoneNumber;
+      } catch (error) {
+        status.innerText = "الكود غلط";
+      }
+    };
+  </script>
+</body>
+</html>
