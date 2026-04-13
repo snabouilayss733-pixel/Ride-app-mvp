@@ -10,24 +10,14 @@
 </head>
 <body class="bg-slate-900 text-white p-4">
     <div class="max-w-md mx-auto">
-        <div class="flex justify-between items-center mb-8 bg-slate-800 p-4 rounded-2xl shadow-lg border border-slate-700">
-            <div>
-                <h1 class="text-xl font-bold text-blue-400">لوحة السائق</h1>
-                <p id="status-text" class="text-xs text-red-500 font-bold">الحالة: غير متصل</p>
-            </div>
-            <button onclick="toggleStatus()" id="status-btn" class="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all">
-                تفعيل الاتصال
-            </button>
-        </div>
-
-        <h2 class="text-lg font-bold mb-4 flex items-center">الطلبات الحالية</h2>
+        <h1 class="text-xl font-black text-green-400 mb-6 flex items-center justify-between">
+            متصل الآن (استقبال الطلبات) 🟢
+        </h1>
         <div id="orders-list" class="space-y-4">
-            <p id="no-orders" class="text-slate-500 text-center py-10">قم بتفعيل الاتصال لاستقبال الطلبات.</p>
-        </div>
+            </div>
     </div>
 
     <script>
-        // إعدادات Firebase الخاصة بك
         const firebaseConfig = {
             apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo",
             authDomain: "ridenowapp-eadf0.firebaseapp.com",
@@ -37,49 +27,40 @@
             messagingSenderId: "184047350605",
             appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04"
         };
-
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        let isOnline = false;
-
-        function toggleStatus() {
-            const btn = document.getElementById('status-btn');
-            const statusText = document.getElementById('status-text');
-            isOnline = !isOnline;
-
-            if (isOnline) {
-                btn.innerText = "إيقاف الاتصال";
-                btn.className = "bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all";
-                statusText.innerText = "الحالة: متصل (استقبال الطلبات)";
-                statusText.className = "text-xs text-green-500 font-bold";
-                listenForOrders();
-            } else {
-                location.reload(); // إعادة تحميل الصفحة لإيقاف الاتصال
-            }
-        }
-
-        function listenForOrders() {
-            database.ref('orders').on('value', (snapshot) => {
-                const ordersList = document.getElementById('orders-list');
-                ordersList.innerHTML = '';
-                
-                if (snapshot.exists()) {
-                    snapshot.forEach((childSnapshot) => {
-                        const order = childSnapshot.val();
-                        const orderHtml = `
-                            <div class="bg-slate-800 p-5 rounded-2xl border-r-4 border-blue-500 shadow-md mb-4">
-                                <p class="text-sm text-slate-300">الوجهة:</p>
-                                <p class="text-lg text-white font-bold mb-3">${order.destination}</p>
-                                <p class="text-sm text-blue-400 font-bold mb-4">📞 ${order.phone}</p>
-                                <button onclick="alert('اتصل بالزبون: ${order.phone}')" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">اتصال بالراكب</button>
+        database.ref('orders').on('value', snap => {
+            const list = document.getElementById('orders-list');
+            list.innerHTML = '';
+            snap.forEach(child => {
+                const o = child.val();
+                if(o.status === 'waiting') {
+                    list.innerHTML += `
+                        <div class="bg-slate-800 p-6 rounded-3xl border-l-8 border-green-500 shadow-2xl">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="bg-green-600 px-3 py-1 rounded-full font-black">${o.price} DH</span>
+                                <a href="https://www.google.com/maps/dir/?api=1&origin=${o.lat},${o.lng}&destination=${o.dLat},${o.dLng}" target="_blank" class="text-blue-400 text-sm underline">فتح الخريطة 📍</a>
                             </div>
-                        `;
-                        ordersList.innerHTML += orderHtml;
-                    });
-                } else {
-                    ordersList.innerHTML = '<p class="text-slate-500 text-center py-10">لا توجد طلبات حالياً.</p>';
+                            <p class="text-sm text-slate-400">هاتف الراكب: ${o.phone}</p>
+                            <button onclick="takeOrder('${child.key}')" class="w-full mt-4 bg-green-600 py-3 rounded-2xl font-bold active:scale-95">قبول الرحلة ✅</button>
+                        </div>
+                    `;
                 }
+            });
+        });
+
+        function takeOrder(id) {
+            // نظام الترانسأكشن: كيمنع جوج سائقين يقبلو نفس الطلب
+            database.ref('orders/' + id).transaction(data => {
+                if(data && data.status === 'waiting') {
+                    data.status = 'accepted';
+                    return data;
+                }
+                return; // الطلب لم يعد متاحاً
+            }, (error, committed) => {
+                if(committed) alert("مبروك! الرحلة لك. تواصل مع الراكب.");
+                else alert("للأسف، سائق آخر سبقك لهذا الطلب 🏃‍♂️");
             });
         }
     </script>
