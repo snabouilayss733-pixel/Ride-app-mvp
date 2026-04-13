@@ -1,64 +1,31 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8"><title>RideNow - اطلب مشوارك</title>
+    <meta charset="UTF-8"><title>RIDENOW - الراكب</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    <style>
-        .tracking-card { transition: all 0.5s ease; bottom: -100%; }
-        .tracking-card.active { bottom: 0; }
-    </style>
 </head>
-<body class="bg-slate-950 text-white font-sans overflow-hidden">
-    <div class="flex flex-col h-screen relative">
-        <div id="map" class="flex-grow z-0"></div>
-
-        <div id="request-ui" class="absolute bottom-0 w-full bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl border-t border-slate-800 z-10">
-            <h1 class="text-2xl font-black text-yellow-500 italic text-center mb-4">RIDENOW</h1>
-            <div class="space-y-3">
-                <input type="text" id="user-name" placeholder="👤 اسمك الكامل" class="w-full p-4 bg-slate-800 rounded-2xl border-none text-sm font-bold">
-                <input type="text" id="start-loc" placeholder="📍 نقطة الانطلاق" class="w-full p-4 bg-slate-800 rounded-2xl border-none text-sm">
-                <input type="text" id="end-loc" placeholder="🏁 وجهتك (حددها على الخريطة)" class="w-full p-4 bg-slate-800 rounded-2xl border-none text-sm text-yellow-400 font-bold">
-                <input type="tel" id="phone" placeholder="📞 رقم جوالك" class="w-full p-4 bg-slate-800 rounded-2xl border-none text-center font-mono">
-                
-                <div id="price-card" class="hidden flex justify-between items-center bg-yellow-600/10 p-4 rounded-2xl border border-yellow-500/20">
-                    <span class="text-slate-400 text-sm font-bold">السعر المقدر:</span>
-                    <span id="price-val" class="text-2xl font-black text-yellow-500">0 SAR</span>
-                </div>
-
-                <button onclick="sendOrder()" id="main-btn" class="w-full bg-yellow-600 py-5 rounded-2xl font-black text-xl active:scale-95 shadow-lg shadow-yellow-900/20 transition-all text-black">تأكيد طلب الرحلة 🚕</button>
+<body class="bg-slate-950 text-white overflow-hidden">
+    <div id="map" class="h-screen w-full"></div>
+    <div id="ui-box" class="fixed bottom-0 w-full bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl z-10 border-t border-yellow-500/20">
+        <div id="step-1">
+            <h1 class="text-center text-yellow-500 font-black mb-4">RIDENOW 🚕</h1>
+            <input type="text" id="user-name" placeholder="👤 اسمك" class="w-full p-4 mb-2 bg-slate-800 rounded-2xl border-none">
+            <input type="tel" id="phone" placeholder="📞 رقم الجوال" class="w-full p-4 mb-2 bg-slate-800 rounded-2xl border-none">
+            <div id="price-card" class="hidden text-center p-3 bg-yellow-500/10 rounded-xl mb-3 border border-yellow-500/20">
+                <span id="price-val" class="text-2xl font-black text-yellow-500">0</span> <span class="text-yellow-500">SAR</span>
             </div>
+            <button onclick="sendOrder()" id="main-btn" class="w-full bg-yellow-600 py-5 rounded-2xl font-black text-xl text-black">اطلب الآن</button>
         </div>
-
-        <div id="tracking-ui" class="tracking-card fixed left-0 w-full bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl border-t border-yellow-500/30 z-20">
-            <div class="flex justify-between items-start mb-6">
-                <div class="flex items-center gap-4">
-                    <div class="w-16 h-16 bg-slate-800 rounded-full border-2 border-yellow-500 overflow-hidden shadow-lg">
-                        <img src="https://ui-avatars.com/api/?name=C&background=EAB308&color=000" class="w-full h-full object-cover">
-                    </div>
-                    <div>
-                        <h3 class="font-black text-lg text-white" id="driver-name-display">الكابتن في الطريق</h3>
-                        <p class="text-[10px] text-yellow-400 font-bold uppercase" id="car-info">جاري جلب بيانات السيارة...</p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <span id="status-badge" class="bg-green-600/20 text-green-500 px-3 py-1 rounded-full text-[10px] font-black animate-pulse">تم قبول الطلب</span>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3 mb-4">
-                <a id="call-driver" href="tel:" class="bg-slate-800 flex flex-col items-center justify-center py-4 rounded-2xl border border-slate-700 active:scale-95">
-                    <span class="text-2xl mb-1">📞</span>
-                    <span class="text-[10px] font-bold">اتصال</span>
-                </a>
-                <button onclick="cancelOrder()" class="bg-red-600/10 text-red-500 flex flex-col items-center justify-center py-4 rounded-2xl border border-red-500/20 active:scale-95">
-                    <span class="text-2xl mb-1">🚫</span>
-                    <span class="text-[10px] font-bold">إلغاء</span>
-                </button>
+        <div id="step-2" class="hidden text-center py-4">
+            <div class="animate-pulse text-4xl mb-4">🚕</div>
+            <h2 id="status-msg" class="text-xl font-bold text-yellow-500">جاري البحث عن كابتن...</h2>
+            <div id="driver-info" class="hidden mt-4 p-4 bg-slate-800 rounded-2xl">
+                <button onclick="confirmRide()" class="bg-green-600 w-full py-4 rounded-xl font-bold">تأكيد الركوب ✅</button>
             </div>
         </div>
     </div>
@@ -70,80 +37,56 @@
 
         let map = L.map('map', {zoomControl: false}).setView([24.7136, 46.6753], 13);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        let uPos, currentOrderId, driverMarkers = {};
 
-        let uPos, currentOrderId, destMarker;
-
-        // 1. استرجاع بيانات المستخدم المحفوظة (Login التلقائي)
-        window.onload = () => {
-            if(localStorage.getItem('riderName')) document.getElementById('user-name').value = localStorage.getItem('riderName');
-            if(localStorage.getItem('riderPhone')) document.getElementById('phone').value = localStorage.getItem('riderPhone');
-        };
+        // رادار السائقين
+        database.ref('drivers_online').on('value', snap => {
+            Object.values(driverMarkers).forEach(m => map.removeLayer(m));
+            snap.forEach(child => {
+                const d = child.val();
+                driverMarkers[child.key] = L.marker([d.lat, d.lng], {icon: L.divIcon({html: '🚕', className: 'text-2xl'})}).addTo(map);
+            });
+        });
 
         navigator.geolocation.getCurrentPosition(p => {
             uPos = [p.coords.latitude, p.coords.longitude];
             map.setView(uPos, 15);
-            L.circleMarker(uPos, {color: '#eab308', radius: 8, fillOpacity: 0.8}).addTo(map);
+            L.circleMarker(uPos, {color: '#eab308', radius: 8}).addTo(map);
         });
 
-        // 2. تحديد الوجهة وحساب السعر تلقائياً
         map.on('click', e => {
-            if(destMarker) map.removeLayer(destMarker);
-            destMarker = L.marker(e.latlng).addTo(map).bindPopup("وجهتك").openPopup();
-            
             const dist = map.distance(uPos, e.latlng) / 1000;
-            const price = Math.floor(7 + (dist * 2.5)); // 7 ريال أساس + 2.5 لكل كيلو
-            
+            const price = Math.floor(7 + (dist * 2.5));
             document.getElementById('price-card').classList.remove('hidden');
-            document.getElementById('price-val').innerText = price + " SAR";
+            document.getElementById('price-val').innerText = price;
             window.lastPrice = price;
-            document.getElementById('end-loc').value = "موقع مخصص على الخريطة";
+            window.dest = e.latlng;
+            L.marker(e.latlng).addTo(map);
         });
 
         function sendOrder() {
             const name = document.getElementById('user-name').value;
             const ph = document.getElementById('phone').value;
-            if(!name || !ph) return alert("أدخل اسمك ورقمك لاهنت!");
+            if(!name || !ph || !window.dest) return alert("سجل بياناتك وحدد الموقع!");
             
-            // حفظ البيانات في الجوال
             localStorage.setItem('riderName', name);
             localStorage.setItem('riderPhone', ph);
 
             currentOrderId = "ord_" + Date.now();
-            database.ref('orders/' + currentOrderId).set({
-                name: name, ph: ph, start: document.getElementById('start-loc').value,
-                end: document.getElementById('end-loc').value,
-                price: window.lastPrice || 15,
-                lat: uPos[0], lng: uPos[1], status: 'waiting'
-            });
+            database.ref('orders/' + currentOrderId).set({ name, ph, price: window.lastPrice, lat: uPos[0], lng: uPos[1], status: 'waiting' });
+            document.getElementById('step-1').classList.add('hidden');
+            document.getElementById('step-2').classList.remove('hidden');
 
-            document.getElementById('main-btn').innerText = "جاري البحث عن كابتن... ⏳";
-            document.getElementById('main-btn').disabled = true;
-
-            // مراقبة حالة الطلب
             database.ref('orders/' + currentOrderId).on('value', snap => {
                 const o = snap.val();
                 if(o.status === 'accepted') {
-                    document.getElementById('request-ui').style.display = 'none';
-                    document.getElementById('tracking-ui').classList.add('active');
-                    document.getElementById('status-badge').innerText = "الكابتن في الطريق إليك";
+                    document.getElementById('status-msg').innerText = "تم قبول الطلب! الكابتن قادم";
+                    document.getElementById('driver-info').classList.remove('hidden');
                 }
-                if(o.status === 'in_progress') {
-                    document.getElementById('status-badge').innerText = "أنت الآن في المشوار 🚗";
-                    document.getElementById('status-badge').classList.replace('bg-green-600/20', 'bg-blue-600/20');
-                }
-                if(o.status === 'completed') {
-                    alert("وصلت بحفظ الله! نتمنى لك يوماً سعيداً.");
-                    location.reload();
-                }
+                if(o.status === 'completed') { alert("وصلت بالسلامة!"); location.reload(); }
             });
         }
-
-        function cancelOrder() {
-            if(confirm("تبغى تلغي المشوار؟")) {
-                database.ref('orders/' + currentOrderId).update({status: 'cancelled'});
-                location.reload();
-            }
-        }
+        function confirmRide() { database.ref('orders/' + currentOrderId).update({status: 'in_progress'}); }
     </script>
 </body>
 </html>
