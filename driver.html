@@ -1,32 +1,90 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8"><title>السائق - RideNow</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RideNow - اطلب رحلة</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
-<body class="bg-slate-900 text-white p-4">
-    <h1 class="text-xl font-bold mb-6 text-green-400">طلبات الراكب المتاحة</h1>
-    <div id="orders-list" class="space-y-4"></div>
+<body class="bg-slate-950 text-white font-sans">
+    <div class="max-w-md mx-auto min-h-screen flex flex-col p-4">
+        <header class="py-6 text-center">
+            <h1 class="text-4xl font-black tracking-tighter text-blue-500">RIDENOW</h1>
+            <p class="text-slate-400 text-sm">أسرع وسيلة للتنقل في مدينتك</p>
+        </header>
+
+        <div id="map" class="flex-grow rounded-[2.5rem] shadow-2xl border-4 border-slate-900 mb-6"></div>
+
+        <div class="bg-slate-900 p-6 rounded-[2.5rem] shadow-2xl space-y-4 border border-slate-800">
+            <div class="space-y-2">
+                <label class="text-xs text-slate-500 font-bold mr-2">رقم الهاتف لتواصل السائق</label>
+                <input type="tel" id="phone" placeholder="06XXXXXXXX" class="w-full bg-slate-800 p-4 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 text-lg font-mono">
+            </div>
+
+            <div id="price-card" class="hidden flex justify-between items-center bg-blue-600/10 p-4 rounded-2xl border border-blue-500/20">
+                <span class="font-bold">ثمن الرحلة:</span>
+                <span id="price-val" class="text-2xl font-black text-blue-500 underline decoration-white">0 DH</span>
+            </div>
+
+            <button onclick="sendOrder()" id="mainBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-5 rounded-2xl font-black text-xl transition-all active:scale-95 shadow-lg shadow-blue-900/20">
+                تأكيد طلب الرحلة
+            </button>
+            <p id="status" class="text-center font-bold text-yellow-500 hidden"></p>
+        </div>
+    </div>
+
     <script>
         const firebaseConfig = { apiKey: "AIzaSyCyRku2u6gIuj6itDb7NXIaF-MtBmMomo", authDomain: "ridenowapp-eadf0.firebaseapp.com", projectId: "ridenowapp-eadf0", databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com", storageBucket: "ridenowapp-eadf0.appspot.com", messagingSenderId: "184047350605", appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04" };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        database.ref('orders').on('value', snap => {
-            const list = document.getElementById('orders-list');
-            list.innerHTML = '';
-            snap.forEach(child => {
-                const o = child.val();
-                if(o.status === 'waiting') {
-                    list.innerHTML += `<div class="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500">
-                        <p>هاتف: ${o.phone}</p>
-                        <a href="https://www.google.com/maps?q=${o.lat},${o.lng}" target="_blank" class="text-blue-400 underline">عرض موقع الراكب 📍</a>
-                        <button onclick="database.ref('orders/${child.key}').update({status:'accepted'})" class="w-full mt-2 bg-green-600 py-2 rounded-lg">قبول</button>
-                    </div>`;
+
+        let map = L.map('map', {zoomControl: false}).setView([33.5731, -7.5898], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        let uPos, dPos, router;
+
+        navigator.geolocation.getCurrentPosition(p => {
+            uPos = [p.coords.latitude, p.coords.longitude];
+            map.setView(uPos, 16);
+            L.circleMarker(uPos, {color: '#3b82f6', radius: 8, fillOpacity: 1}).addTo(map);
+        });
+
+        map.on('click', e => {
+            dPos = e.latLng;
+            if(router) map.removeControl(router);
+            router = L.Routing.control({
+                waypoints: [L.latLng(uPos[0], uPos[1]), dPos],
+                lineOptions: { styles: [{color: '#3b82f6', weight: 6}] },
+                createMarker: () => null
+            }).on('routesfound', ev => {
+                let dist = ev.routes[0].summary.totalDistance / 1000;
+                let price = Math.round(dist * 7) + 12; // 7 دراهم للكيلومتر + 12 فتح العداد
+                document.getElementById('price-card').classList.remove('hidden');
+                document.getElementById('price-val').innerText = price + " DH";
+                window.lastPrice = price;
+            }).addTo(map);
+        });
+
+        function sendOrder() {
+            const ph = document.getElementById('phone').value;
+            if(!ph || !dPos) return alert("اختر وجهتك أولاً!");
+            const id = "ord_" + Date.now();
+            database.ref('orders/' + id).set({ ph, price: window.lastPrice, lat: uPos[0], lng: uPos[1], dLat: dPos.lat, dLng: dPos.lng, status: 'waiting' });
+            document.getElementById('status').innerText = "جاري البحث عن سائق... ⏳";
+            document.getElementById('status').classList.remove('hidden');
+            database.ref('orders/'+id+'/status').on('value', s => {
+                if(s.val() === 'accepted') {
+                    document.getElementById('status').innerText = "✅ تم القبول! السائق قادم إليك.";
+                    document.body.classList.add('bg-green-950');
                 }
             });
-        });
+        }
     </script>
 </body>
 </html>
