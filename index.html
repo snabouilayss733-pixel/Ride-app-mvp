@@ -1,32 +1,45 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"><title>RideNow - اطلب رحلة</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RideNow - اطلب رحلة</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-white p-4">
-    <div class="max-w-md mx-auto space-y-4">
-        <h1 class="text-3xl font-black text-blue-500 text-center italic">RIDENOW</h1>
-        <div id="map" class="h-64 rounded-3xl border-4 border-slate-900 shadow-2xl"></div>
-        
-        <div class="bg-slate-900 p-6 rounded-[2rem] shadow-xl border border-slate-800 space-y-3">
-            <input type="text" id="start-loc" placeholder="📍 نقطة الانطلاق (مثلاً: كازا فواياجور)" class="w-full p-4 bg-slate-800 rounded-xl border-none text-sm">
-            <input type="text" id="end-loc" placeholder="🏁 إلى أين؟ (الوجهة)" class="w-full p-4 bg-slate-800 rounded-xl border-none text-sm font-bold text-blue-400">
-            <input type="tel" id="phone" placeholder="📞 رقم هاتفك" class="w-full p-4 bg-slate-800 rounded-xl border-none">
+<body class="bg-slate-950 text-white font-sans overflow-hidden">
+    <div class="flex flex-col h-screen">
+        <div id="map" class="flex-grow"></div>
+
+        <div class="bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl border-t border-slate-800 space-y-4 pb-10">
+            <h1 class="text-2xl font-black text-blue-500 italic text-center">RIDENOW</h1>
             
-            <div id="price-card" class="hidden flex justify-between bg-blue-600/20 p-4 rounded-xl border border-blue-500/30">
-                <span class="font-bold">ثمن الرحلة:</span>
-                <span id="price-val" class="text-xl font-black text-blue-400">0 DH</span>
+            <div class="space-y-2">
+                <div class="flex items-center bg-slate-800 rounded-2xl p-4 gap-3">
+                    <span class="text-blue-500">📍</span>
+                    <input type="text" id="start-loc" placeholder="موقع الانطلاق (تلقائي)" class="bg-transparent border-none w-full text-sm focus:ring-0">
+                </div>
+                <div class="flex items-center bg-slate-800 rounded-2xl p-4 gap-3">
+                    <span class="text-red-500">🏁</span>
+                    <input type="text" id="end-loc" placeholder="إلى أين ستذهب؟" class="bg-transparent border-none w-full text-sm focus:ring-0 font-bold">
+                </div>
             </div>
 
-            <button onclick="sendOrder()" class="w-full bg-blue-600 py-4 rounded-2xl font-black text-xl active:scale-95 shadow-lg">اطلب الآن 🚕</button>
-            <p id="status" class="text-center text-yellow-500 font-bold hidden"></p>
+            <div id="price-card" class="hidden flex justify-between items-center bg-blue-600/10 p-4 rounded-2xl border border-blue-500/20">
+                <span class="font-bold text-slate-400">الثمن المقدر:</span>
+                <span id="price-val" class="text-3xl font-black text-blue-500">-- DH</span>
+            </div>
+
+            <input type="tel" id="phone" placeholder="📞 رقم الهاتف للتواصل" class="w-full p-4 bg-slate-800 rounded-2xl border-none font-mono text-center">
+
+            <button onclick="sendOrder()" id="mainBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-5 rounded-2xl font-black text-xl transition-all active:scale-95 shadow-lg shadow-blue-900/20">
+                تأكيد طلب الرحلة
+            </button>
+            <p id="status" class="text-center font-bold text-yellow-500 hidden"></p>
         </div>
     </div>
 
@@ -35,39 +48,59 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        let map = L.map('map').setView([33.5731, -7.5898], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let map = L.map('map', {zoomControl: false}).setView([33.5731, -7.5898], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        let uPos;
+        let uPos, dPos, router;
+
+        // تحديد موقع الراكب تلقائياً
         navigator.geolocation.getCurrentPosition(p => {
             uPos = [p.coords.latitude, p.coords.longitude];
-            map.setView(uPos, 15);
-            L.marker(uPos).addTo(map).bindPopup("موقعك").openPopup();
+            map.setView(uPos, 16);
+            L.circleMarker(uPos, {color: '#3b82f6', radius: 10, fillOpacity: 0.8}).addTo(map);
+            document.getElementById('start-loc').value = "موقعي الحالي";
         });
 
-        // حساب السعر (تجريبي بناءً على الوجهة)
+        // اختيار الوجهة في الخريطة وحساب السعر
         map.on('click', e => {
-            window.dest = e.latLng;
-            let price = Math.floor(Math.random() * 40) + 15; // ثمن عشوائي بين 15 و 55 درهم للتجربة
-            document.getElementById('price-card').classList.remove('hidden');
-            document.getElementById('price-val').innerText = price + " DH";
-            window.finalPrice = price;
-            L.marker(e.latLng, {icon: L.divIcon({className: 'bg-red-500 w-4 h-4 rounded-full'})}).addTo(map);
+            dPos = e.latLng;
+            if(router) map.removeControl(router);
+            router = L.Routing.control({
+                waypoints: [L.latLng(uPos[0], uPos[1]), dPos],
+                lineOptions: { styles: [{color: '#3b82f6', weight: 8, opacity: 0.8}] },
+                createMarker: () => null
+            }).on('routesfound', ev => {
+                let dist = ev.routes[0].summary.totalDistance / 1000;
+                let price = Math.round(dist * 6) + 10; // 6 دراهم للكيلومتر + 10 فتح العداد
+                document.getElementById('price-card').classList.remove('hidden');
+                document.getElementById('price-val').innerText = price + " DH";
+                window.lastPrice = price;
+                document.getElementById('end-loc').value = "الوجهة المختارة";
+            }).addTo(map);
         });
 
         function sendOrder() {
+            const ph = document.getElementById('phone').value;
             const start = document.getElementById('start-loc').value;
             const end = document.getElementById('end-loc').value;
-            const ph = document.getElementById('phone').value;
-            if(!start || !end || !ph) return alert("عمر الخانات كاملين!");
-
-            const id = "order_" + Date.now();
-            database.ref('orders/' + id).set({
-                start, end, ph, price: window.finalPrice,
-                lat: uPos[0], lng: uPos[1], status: 'waiting'
+            if(!ph || !dPos) return alert("اختر وجهتك في الخريطة أولاً!");
+            
+            const id = "ord_" + Date.now();
+            database.ref('orders/' + id).set({ 
+                ph, start, end, price: window.lastPrice, 
+                lat: uPos[0], lng: uPos[1], dLat: dPos.lat, dLng: dPos.lng, status: 'waiting' 
             });
-            document.getElementById('status').innerText = "جاري البحث عن سائق... ⏳";
+            
+            document.getElementById('status').innerText = "جاري البحث عن أقرب سائق... ⏳";
             document.getElementById('status').classList.remove('hidden');
+
+            database.ref('orders/'+id+'/status').on('value', s => {
+                if(s.val() === 'accepted') {
+                    document.getElementById('status').innerText = "✅ تم قبول رحلتك! السائق قادم.";
+                    document.getElementById('mainBtn').innerText = "الرحلة مقبولة";
+                    document.getElementById('mainBtn').className = "w-full bg-green-600 py-5 rounded-2xl font-black text-xl cursor-default";
+                }
+            });
         }
     </script>
 </body>
