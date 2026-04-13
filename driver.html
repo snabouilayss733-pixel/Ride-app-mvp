@@ -1,17 +1,53 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8"><title>السائق - RIDENOW</title>
+    <meta charset="UTF-8"><title>لوحة السائق - RIDENOW</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-white p-4">
-    <div class="max-w-md mx-auto">
-        <h2 class="text-2xl font-black text-green-500 mb-6 border-b border-slate-800 pb-4 italic">DRIVER MODE 🟢</h2>
-        <div id="list" class="space-y-4">
+<body class="bg-slate-950 text-white font-sans overflow-hidden">
+    <div class="flex flex-col h-screen">
+        <div id="map" class="flex-grow z-0"></div>
+
+        <div id="driver-ui" class="absolute bottom-0 w-full bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl border-t border-green-500/30 z-10">
+            <div id="no-orders" class="text-center py-4 text-slate-500 font-bold italic uppercase tracking-widest text-sm">
+                في انتظار طلبات جديدة... 📡
             </div>
+
+            <div id="active-order" class="hidden space-y-4">
+                <div class="flex justify-between items-center bg-green-600/10 p-4 rounded-2xl border border-green-500/20">
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">الراكب:</p>
+                        <h3 id="p-name" class="text-lg font-black text-white">---</h3>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">المشوار:</p>
+                        <span id="p-price" class="text-2xl font-black text-green-500">0 DH</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2 text-sm">
+                    <p class="flex items-center gap-2 text-blue-400 font-bold"><span class="text-xs">📍</span> <span id="p-start" class="truncate text-white">---</span></p>
+                    <p class="flex items-center gap-2 text-red-500 font-bold"><span class="text-xs">🏁</span> <span id="p-end" class="truncate text-white">---</span></p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <a id="p-call" href="tel:" class="bg-slate-800 flex items-center justify-center p-4 rounded-2xl border border-slate-700 active:scale-95">
+                        <span class="text-xl mr-2">📞</span> <span class="text-xs font-bold">اتصال</span>
+                    </a>
+                    <button onclick="cancelByDriver()" class="bg-red-600/10 text-red-500 flex items-center justify-center p-4 rounded-2xl border border-red-500/20 active:scale-95">
+                        <span class="text-xl mr-2">🚫</span> <span class="text-xs font-bold">إلغاء</span>
+                    </button>
+                </div>
+
+                <button onclick="acceptBtn()" id="accept-btn" class="w-full bg-blue-600 py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">قـبول الطلب ✅</button>
+                <p id="eta" class="text-center text-xs font-bold text-green-400 animate-pulse hidden">الوقت للوصول: 4 دقائق</p>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -19,33 +55,61 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        database.ref('orders').on('value', snap => {
-            const list = document.getElementById('list');
-            list.innerHTML = '';
-            snap.forEach(child => {
-                const o = child.val();
-                if(o.status === 'waiting') {
-                    list.innerHTML += `
-                        <div class="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl relative">
-                            <div class="absolute top-0 left-0 bg-green-600 px-6 py-2 rounded-br-3xl font-black text-xl shadow-lg">${o.price} DH</div>
-                            <div class="mt-8 space-y-3 text-right">
-                                <p class="text-white"><span class="text-blue-400 font-bold ml-2">📍 من:</span> ${o.start}</p>
-                                <p class="text-white"><span class="text-red-500 font-bold ml-2">🏁 إلى:</span> ${o.end}</p>
-                                <p class="text-2xl font-mono mt-4 text-green-400 font-bold tracking-tighter text-left">📞 ${o.ph}</p>
-                            </div>
-                            <div class="flex gap-2 mt-6">
-                                <button onclick="accept('${child.key}')" class="flex-grow bg-blue-600 hover:bg-blue-700 py-4 rounded-2xl font-black text-lg active:scale-95 transition-all">قـبول الطلب ✅</button>
-                                <a href="https://www.google.com/maps?q=${o.lat},${o.lng}" target="_blank" class="bg-slate-800 p-4 rounded-2xl flex items-center shadow-lg">📍</a>
-                            </div>
-                        </div>
-                    `;
-                }
-            });
+        let map = L.map('map', {zoomControl: false}).setView([33.5731, -7.5898], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        let dPos, currentOrderId;
+
+        // تحديد موقع السائق الحقيقي
+        navigator.geolocation.getCurrentPosition(p => {
+            dPos = [p.coords.latitude, p.coords.longitude];
+            map.setView(dPos, 16);
+            L.circleMarker(dPos, {color: '#10b981', radius: 10, fillOpacity: 0.8}).addTo(map);
         });
 
-        function accept(id) {
-            database.ref('orders/' + id).update({status: 'accepted'});
-            alert("تم قبول الطلب! تواصل مع الراكب.");
+        // مراقبة الطلبات
+        database.ref('orders').on('value', snap => {
+            const noOrders = document.getElementById('no-orders');
+            const activeUI = document.getElementById('active-order');
+            
+            let found = false;
+            snap.forEach(child => {
+                const o = child.val();
+                if(o.status === 'waiting' || (o.status === 'accepted' && currentOrderId === child.key)) {
+                    found = true;
+                    currentOrderId = child.key;
+                    noOrders.classList.add('hidden');
+                    activeUI.classList.remove('hidden');
+                    
+                    document.getElementById('p-name').innerText = o.name || "راكب جديد";
+                    document.getElementById('p-price').innerText = o.price + " DH";
+                    document.getElementById('p-start').innerText = o.start;
+                    document.getElementById('p-end').innerText = o.end;
+                    document.getElementById('p-call').href = "tel:" + o.ph;
+                    
+                    // وضع علامة الراكب في الخريطة
+                    L.marker([o.lat, o.lng]).addTo(map).bindPopup("موقع الراكب").openPopup();
+                }
+            });
+
+            if(!found) {
+                noOrders.classList.remove('hidden');
+                activeUI.classList.add('hidden');
+            }
+        });
+
+        function acceptBtn() {
+            database.ref('orders/' + currentOrderId).update({status: 'accepted'});
+            document.getElementById('accept-btn').innerText = "تم القبول - توجه للراكب";
+            document.getElementById('accept-btn').classList.replace('bg-blue-600', 'bg-slate-700');
+            document.getElementById('eta').classList.remove('hidden');
+        }
+
+        function cancelByDriver() {
+            if(confirm("واش بصح بغيتي تلغي الطلب؟")) {
+                database.ref('orders/' + currentOrderId).update({status: 'waiting'});
+                location.reload();
+            }
         }
     </script>
 </body>
