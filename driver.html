@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8"><title>لوحة السائق - RIDENOW</title>
+    <meta charset="UTF-8"><title>لوحة الكابتن - RIDENOW</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -10,41 +10,45 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
 <body class="bg-slate-950 text-white font-sans overflow-hidden">
-    <div class="flex flex-col h-screen">
+    <audio id="alert-sound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
+
+    <div class="flex flex-col h-screen relative">
         <div id="map" class="flex-grow z-0"></div>
 
-        <div id="driver-ui" class="absolute bottom-0 w-full bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl border-t border-green-500/30 z-10">
-            <div id="no-orders" class="text-center py-4 text-slate-500 font-bold italic">في انتظار طلبات جديدة... 📡</div>
+        <div id="driver-ui" class="absolute bottom-0 w-full bg-slate-900 p-6 rounded-t-[2.5rem] shadow-2xl border-t border-yellow-500/30 z-10">
+            <div id="no-orders" class="text-center py-4 text-slate-500 font-bold italic">بانتظار طلبات المشاوير... 📡</div>
 
             <div id="active-order" class="hidden space-y-4">
-                <div class="flex justify-between items-center bg-green-600/10 p-4 rounded-2xl border border-green-500/20">
+                <div class="flex justify-between items-center bg-yellow-600/10 p-4 rounded-2xl border border-yellow-500/20">
                     <div>
-                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">الراكب الحالي:</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">العميل:</p>
                         <h3 id="p-name" class="text-xl font-black text-white">---</h3>
                     </div>
                     <div class="text-right">
-                        <span id="p-price" class="text-2xl font-black text-green-500">0 DH</span>
+                        <span id="p-price" class="text-2xl font-black text-yellow-500">0 SAR</span>
                     </div>
                 </div>
 
-                <div class="space-y-2 border-y border-slate-800 py-3">
-                    <p class="text-sm flex items-center gap-2 text-blue-400 font-bold italic"><span class="text-xs">📍 من:</span> <span id="p-start" class="text-white truncate">---</span></p>
-                    <p class="text-sm flex items-center gap-2 text-red-500 font-bold italic"><span class="text-xs">🏁 إلى:</span> <span id="p-end" class="text-white truncate">---</span></p>
-                </div>
-
                 <div class="grid grid-cols-2 gap-3">
-                    <a id="p-call" href="tel:" class="bg-slate-800 flex flex-col items-center justify-center py-4 rounded-2xl border border-slate-700 active:scale-95 transition-all">
-                        <span class="text-2xl mb-1">📞</span>
-                        <span class="text-[10px] font-bold">اتصال بالراكب</span>
-                    </a>
-                    <button onclick="cancelByDriver()" class="bg-red-600/10 text-red-500 flex flex-col items-center justify-center py-4 rounded-2xl border border-red-500/20 active:scale-95">
-                        <span class="text-2xl mb-1">🚫</span>
-                        <span class="text-[10px] font-bold">إلغاء الطلب</span>
+                    <button onclick="openInGoogleMaps()" class="bg-blue-600 flex flex-col items-center justify-center py-4 rounded-2xl active:scale-95 shadow-lg">
+                        <span class="text-2xl mb-1">📍</span>
+                        <span class="text-[10px] font-bold">موقع الراكب</span>
                     </button>
+                    <a id="p-call" href="tel:" class="bg-slate-800 flex flex-col items-center justify-center py-4 rounded-2xl border border-slate-700 active:scale-95">
+                        <span class="text-2xl mb-1">📞</span>
+                        <span class="text-[10px] font-bold">اتصال بالعميل</span>
+                    </a>
                 </div>
 
-                <button onclick="acceptBtn()" id="accept-btn" class="w-full bg-blue-600 py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">قـبول الـطلب ✅</button>
-                <div id="eta-box" class="hidden text-center text-xs font-bold text-green-400 animate-pulse mt-2 italic">الوقت التقديري للوصول: 4 دقائق</div>
+                <div id="status-btns" class="space-y-2">
+                    <button onclick="acceptBtn()" id="accept-btn" class="w-full bg-green-600 py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">قـبول الطلب ✅</button>
+                    <div id="trip-manage" class="hidden grid grid-cols-2 gap-2">
+                        <button onclick="confirmPickup()" class="bg-yellow-600 py-4 rounded-xl font-bold">تم الإركاب 🚗</button>
+                        <button onclick="finishTrip()" class="bg-green-700 py-4 rounded-xl font-bold">إنهاء المشوار 🏁</button>
+                    </div>
+                </div>
+                
+                <button onclick="cancelByDriver()" class="w-full text-red-500 text-xs font-bold py-2">إلغاء الطلب 🚫</button>
             </div>
         </div>
     </div>
@@ -54,63 +58,71 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        let map = L.map('map', {zoomControl: false}).setView([33.5731, -7.5898], 13);
+        let map = L.map('map', {zoomControl: false}).setView([24.7136, 46.6753], 13); // الرياض
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        let dPos, currentOrderId, pMarker;
+        let dPos, currentOrderId, pLat, pLng;
 
-        // تحديد موقع السائق الحقيقي
         navigator.geolocation.getCurrentPosition(p => {
             dPos = [p.coords.latitude, p.coords.longitude];
             map.setView(dPos, 16);
-            L.circleMarker(dPos, {color: '#10b981', radius: 10, fillOpacity: 1, weight: 3}).addTo(map);
+            L.circleMarker(dPos, {color: '#eab308', radius: 10, fillOpacity: 1}).addTo(map);
         });
 
-        // مراقبة الطلبات المباشرة
         database.ref('orders').on('value', snap => {
             let found = false;
             snap.forEach(child => {
                 const o = child.val();
-                if(o.status === 'waiting' || (o.status === 'accepted' && currentOrderId === child.key)) {
+                if(o.status === 'waiting' || (o.status === 'accepted' && currentOrderId === child.key) || (o.status === 'in_progress' && currentOrderId === child.key)) {
                     found = true;
+                    if(o.status === 'waiting' && currentOrderId !== child.key) {
+                        document.getElementById('alert-sound').play(); // رنين التنبيه
+                    }
                     currentOrderId = child.key;
+                    pLat = o.lat; pLng = o.lng;
+                    
                     document.getElementById('no-orders').classList.add('hidden');
                     document.getElementById('active-order').classList.remove('hidden');
-                    
-                    document.getElementById('p-name').innerText = o.name || "راكب مجهول";
-                    document.getElementById('p-price').innerText = o.price + " DH";
-                    document.getElementById('p-start').innerText = o.start;
-                    document.getElementById('p-end').innerText = o.end;
+                    document.getElementById('p-name').innerText = o.name;
+                    document.getElementById('p-price').innerText = o.price + " SAR";
                     document.getElementById('p-call').href = "tel:" + o.ph;
-                    
-                    if(pMarker) map.removeLayer(pMarker);
-                    pMarker = L.marker([o.lat, o.lng]).addTo(map).bindPopup("موقع الراكب").openPopup();
-                    map.flyTo([o.lat, o.lng], 15);
+
+                    if(o.status === 'accepted' || o.status === 'in_progress') {
+                        document.getElementById('accept-btn').classList.add('hidden');
+                        document.getElementById('trip-manage').classList.remove('hidden');
+                    }
                 }
             });
-
-            if(!found) {
-                document.getElementById('no-orders').classList.remove('hidden');
-                document.getElementById('active-order').classList.add('hidden');
-            }
+            if(!found) location.reload(); 
         });
 
         function acceptBtn() {
             database.ref('orders/' + currentOrderId).update({status: 'accepted'});
-            document.getElementById('accept-btn').innerText = "تم القبول - توجه للموقع";
-            document.getElementById('accept-btn').classList.replace('bg-blue-600', 'bg-slate-700');
-            document.getElementById('eta-box').classList.remove('hidden');
+        }
+
+        function confirmPickup() {
+            database.ref('orders/' + currentOrderId).update({status: 'in_progress'});
+            alert("تم تأكيد ركوب العميل. رافقتكم السلامة!");
+        }
+
+        function finishTrip() {
+            database.ref('orders/' + currentOrderId).update({status: 'completed'});
+            alert("تم إنهاء المشوار بنجاح!");
+            location.reload();
+        }
+
+        function openInGoogleMaps() {
+            window.open(`https://www.google.com/maps?q=${pLat},${pLng}`, '_blank');
         }
 
         function cancelByDriver() {
-            if(confirm("واش متأكد بغيتي تلغي الطلب؟")) {
+            if(confirm("هل أنت متأكد من إلغاء الطلب؟")) {
                 database.ref('orders/' + currentOrderId).update({status: 'waiting'});
                 location.reload();
             }
         }
     </script>
 </body>
-</html>
-    
+</html> 
 
    
