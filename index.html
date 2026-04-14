@@ -16,18 +16,18 @@
                 <input type="tel" id="phone" placeholder="9665xxxxxxxx" 
                        class="w-full p-3 border rounded-lg mb-4 text-left" dir="ltr">
                 <button onclick="sendOTP()" id="sendBtn"
-                        class="w-full bg-green-500 text-white p-3 rounded-lg hover:bg-green-600 font-bold">
+                        class="w-full bg-green-500 text-white p-3 rounded-lg hover:bg-green-600">
                     أرسل كود على واتساب
                 </button>
             </div>
 
             <div id="otp-step" class="hidden">
-                <p class="text-sm text-gray-600 mb-4 text-center">وصلتك رسالة على واتساب فيها الكود</p>
-                <label class="block mb-2">أدخل الكود المكون من 6 أرقام</label>
+                <p class="text-sm text-gray-600 mb-4 text-center">وصلتك رسالة واتساب فيها الكود</p>
+                <label class="block mb-2">ادخل الكود المكون من 6 أرقام</label>
                 <input type="text" id="otp" placeholder="123456" 
-                       class="w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest" maxlength="6">
+                       class="w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest">
                 <button onclick="verifyOTP()" 
-                        class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 font-bold">
+                        class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600">
                     تحقق ودخول
                 </button>
                 <button onclick="backToPhone()" class="w-full mt-3 text-sm text-gray-500">
@@ -35,4 +35,83 @@
                 </button>
             </div>
 
-            <div
+            <div id="success-step" class="hidden text-center">
+                <div class="text-green-500 text-5xl mb-4">✓</div>
+                <h2 class="text-xl font-bold mb-2">تم الدخول بنجاح!</h2>
+                <p class="text-gray-600">رقمك: <span id="user-phone"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // هذا كودك من الصورة 👇
+        const firebaseConfig = {
+          apiKey: "AIzaSyCyRku2u6gIuj6itpDb7NXIaF-MtBmMomo",
+          authDomain: "ridenowapp-eadf0.firebaseapp.com",
+          databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com",
+          projectId: "ridenowapp-eadf0",
+          storageBucket: "ridenowapp-eadf0.firebasestorage.app",
+          messagingSenderId: "184047350605",
+          appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04",
+          measurementId: "G-H8K5DF4SFG"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'sendBtn', {
+            'size': 'invisible'
+        });
+
+        let confirmationResult;
+
+        window.sendOTP = async function() {
+            const phoneNumber = '+' + document.getElementById('phone').value;
+            const btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+            btn.textContent = 'جاري الإرسال...';
+            
+            try {
+                confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
+                document.getElementById('phone-step').classList.add('hidden');
+                document.getElementById('otp-step').classList.remove('hidden');
+            } catch (error) {
+                alert('خطأ: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = 'أرسل كود على واتساب';
+            }
+        }
+
+        window.verifyOTP = async function() {
+            const code = document.getElementById('otp').value;
+            try {
+                const result = await confirmationResult.confirm(code);
+                const user = result.user;
+                
+                await setDoc(doc(db, "users", user.uid), {
+                    phone: user.phoneNumber,
+                    createdAt: serverTimestamp()
+                });
+                
+                document.getElementById('otp-step').classList.add('hidden');
+                document.getElementById('success-step').classList.remove('hidden');
+                document.getElementById('user-phone').textContent = user.phoneNumber;
+            } catch (error) {
+                alert('الكود غلط');
+            }
+        }
+
+        window.backToPhone = function() {
+            document.getElementById('otp-step').classList.add('hidden');
+            document.getElementById('phone-step').classList.remove('hidden');
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('sendBtn').textContent = 'أرسل كود على واتساب';
+        }
+    </script>
+</body>
+</html>
