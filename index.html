@@ -1,117 +1,141 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ride App - دخول واتساب</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RideNow - دخول</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
-<body class="bg-gray-100">
-    <div class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-            <h1 class="text-2xl font-bold mb-6 text-center">تسجيل الدخول برقم الواتساب</h1>
-            
-            <div id="phone-step">
-                <label class="block mb-2">رقم الواتساب مع مفتاح الدولة</label>
-                <input type="tel" id="phone" placeholder="9665xxxxxxxx" 
-                       class="w-full p-3 border rounded-lg mb-4 text-left" dir="ltr">
-                <button onclick="sendOTP()" id="sendBtn"
-                        class="w-full bg-green-500 text-white p-3 rounded-lg hover:bg-green-600">
-                    أرسل كود على واتساب
-                </button>
-            </div>
-
-            <div id="otp-step" class="hidden">
-                <p class="text-sm text-gray-600 mb-4 text-center">وصلتك رسالة واتساب فيها الكود</p>
-                <label class="block mb-2">ادخل الكود المكون من 6 أرقام</label>
-                <input type="text" id="otp" placeholder="123456" 
-                       class="w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest">
-                <button onclick="verifyOTP()" 
-                        class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600">
-                    تحقق ودخول
-                </button>
-                <button onclick="backToPhone()" class="w-full mt-3 text-sm text-gray-500">
-                    ← تغيير الرقم
-                </button>
-            </div>
-
-            <div id="success-step" class="hidden text-center">
-                <div class="text-green-500 text-5xl mb-4">✓</div>
-                <h2 class="text-xl font-bold mb-2">تم الدخول بنجاح!</h2>
-                <p class="text-gray-600">رقمك: <span id="user-phone"></span></p>
-            </div>
-        </div>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  
+  <div class="bg-white p-8 rounded-2xl shadow-lg w-96">
+    <h1 class="text-3xl font-bold text-center mb-6 text-green-600">RideNow</h1>
+    
+    <!-- شاشة رقم الجوال -->
+    <div id="phone-screen">
+      <label class="block mb-2 font-semibold">رقم الجوال</label>
+      <input id="phone" type="tel" placeholder="05xxxxxxxx" class="w-full p-3 border rounded-lg mb-4 text-left" dir="ltr">
+      <button onclick="sendOTP()" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold">أرسل كود الواتساب</button>
     </div>
 
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    <!-- شاشة الكود -->
+    <div id="otp-screen" class="hidden">
+      <label class="block mb-2 font-semibold">أدخل الكود المرسل واتساب</label>
+      <input id="otp" type="text" placeholder="123456" class="w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest" maxlength="6">
+      <button onclick="verifyOTP()" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold">تأكيد الدخول</button>
+      <button onclick="backToPhone()" class="w-full mt-2 text-gray-500 text-sm">تغيير الرقم</button>
+    </div>
 
-        // هذا كودك من الصورة 👇
-        const firebaseConfig = {
-          apiKey: "AIzaSyCyRku2u6gIuj6itpDb7NXIaF-MtBmMomo",
-          authDomain: "ridenowapp-eadf0.firebaseapp.com",
-          databaseURL: "https://ridenowapp-eadf0-default-rtdb.firebaseio.com",
-          projectId: "ridenowapp-eadf0",
-          storageBucket: "ridenowapp-eadf0.firebasestorage.app",
-          messagingSenderId: "184047350605",
-          appId: "1:184047350605:web:622b9f7d8b4b2af95a7d04",
-          measurementId: "G-H8K5DF4SFG"
-        };
+    <p id="msg" class="text-center mt-4 text-sm"></p>
+  </div>
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'sendBtn', {
-            'size': 'invisible'
-        });
+<script>
+// 1. عدل firebaseConfig حقك من Firebase Console > Project Settings
+const firebaseConfig = {
+  apiKey: "ضع_الـ_API_KEY_حقك",
+  authDomain: "ridenowapp-eadf0.firebaseapp.com",
+  projectId: "ridenowapp-eadf0",
+  storageBucket: "ridenowapp-eadf0.appspot.com",
+  messagingSenderId: "ضع_الرقم_حقك",
+  appId: "ضع_الـ_APP_ID_حقك"
+};
 
-        let confirmationResult;
+// 2. بيانات UltraMsg حقتك - جاهزة
+const ULTRAMSG_INSTANCE = "instance170099";
+const ULTRAMSG_TOKEN = "9mormjnkqumqkkmn";
 
-        window.sendOTP = async function() {
-            const phoneNumber = '+' + document.getElementById('phone').value;
-            const btn = document.getElementById('sendBtn');
-            btn.disabled = true;
-            btn.textContent = 'جاري الإرسال...';
-            
-            try {
-                confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
-                document.getElementById('phone-step').classList.add('hidden');
-                document.getElementById('otp-step').classList.remove('hidden');
-            } catch (error) {
-                alert('خطأ: ' + error.message);
-                btn.disabled = false;
-                btn.textContent = 'أرسل كود على واتساب';
-            }
-        }
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-        window.verifyOTP = async function() {
-            const code = document.getElementById('otp').value;
-            try {
-                const result = await confirmationResult.confirm(code);
-                const user = result.user;
-                
-                await setDoc(doc(db, "users", user.uid), {
-                    phone: user.phoneNumber,
-                    createdAt: serverTimestamp()
-                });
-                
-                document.getElementById('otp-step').classList.add('hidden');
-                document.getElementById('success-step').classList.remove('hidden');
-                document.getElementById('user-phone').textContent = user.phoneNumber;
-            } catch (error) {
-                alert('الكود غلط');
-            }
-        }
+let currentPhone = "";
 
-        window.backToPhone = function() {
-            document.getElementById('otp-step').classList.add('hidden');
-            document.getElementById('phone-step').classList.remove('hidden');
-            document.getElementById('sendBtn').disabled = false;
-            document.getElementById('sendBtn').textContent = 'أرسل كود على واتساب';
-        }
-    </script>
+function showMsg(text, error = false) {
+  const msg = document.getElementById('msg');
+  msg.textContent = text;
+  msg.className = error ? 'text-center mt-4 text-sm text-red-500' : 'text-center mt-4 text-sm text-green-600';
+}
+
+async function sendOTP() {
+  const phoneInput = document.getElementById('phone').value.trim();
+  if (!phoneInput) return showMsg('دخل رقم الجوال', true);
+  
+  currentPhone = phoneInput.startsWith('+') ? phoneInput : '+966' + phoneInput.replace(/^0/, '');
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  showMsg('جاري إرسال الكود...');
+  
+  try {
+    // حفظ الكود في Firestore لمدة 5 دقايق
+    await db.collection('otps').doc(currentPhone).set({
+      code: otp,
+      created: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // إرسال واتساب عبر UltraMsg
+    const msg = `مرحباً بك في RideNow 🚗\nكود الدخول: ${otp}\nصالح لمدة 5 دقائق`;
+    const url = `https://api.ultramsg.com/${ULTRAMSG_INSTANCE}/messages/chat?token=${ULTRAMSG_TOKEN}&to=${currentPhone}&body=${encodeURIComponent(msg)}`;
+    
+    const response = await fetch(url);
+    const result = await response.json();
+    
+    if (result.sent === 'true' || result.message === 'ok') {
+      document.getElementById('phone-screen').classList.add('hidden');
+      document.getElementById('otp-screen').classList.remove('hidden');
+      showMsg('تم إرسال الكود واتساب ✅');
+    } else {
+      throw new Error('فشل الإرسال');
+    }
+    
+  } catch (e) {
+    console.error(e);
+    showMsg('خطأ في الإرسال. تأكد من الرقم وحالة الـ Instance', true);
+  }
+}
+
+async function verifyOTP() {
+  const userOTP = document.getElementById('otp').value.trim();
+  if (!userOTP) return showMsg('دخل الكود', true);
+  
+  showMsg('جاري التحقق...');
+  
+  try {
+    const doc = await db.collection('otps').doc(currentPhone).get();
+    if (!doc.exists) return showMsg('الكود منتهي. اطلب كود جديد', true);
+    
+    const data = doc.data();
+    const now = Date.now();
+    const created = data.created.toDate().getTime();
+    
+    // تحقق من الوقت: 5 دقايق
+    if (now - created > 5 * 60 * 1000) {
+      await db.collection('otps').doc(currentPhone).delete();
+      return showMsg('الكود منتهي. اطلب كود جديد', true);
+    }
+    
+    if (data.code === userOTP) {
+      await db.collection('otps').doc(currentPhone).delete();
+      localStorage.setItem('user_phone', currentPhone);
+      showMsg('تم الدخول بنجاح 🎉');
+      setTimeout(() => {
+        // غير هذا الرابط لصفحة الرئيسية حقتك
+        window.location.href = './home.html'; 
+      }, 1000);
+    } else {
+      showMsg('الكود غلط', true);
+    }
+  } catch (e) {
+    showMsg('خطأ في التحقق', true);
+  }
+}
+
+function backToPhone() {
+  document.getElementById('otp-screen').classList.add('hidden');
+  document.getElementById('phone-screen').classList.remove('hidden');
+  showMsg('');
+}
+</script>
+
 </body>
 </html>
